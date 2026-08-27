@@ -1,6 +1,6 @@
 // Ruta del componente: src/components/Navbar.jsx
 import { useState, useRef, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { ICONS } from '../icons';
 
 // Arreglo para cargar vistas al navbar
@@ -22,8 +22,6 @@ export function Navbar({ role = 'Administrador' }) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
   const openButtonRef = useRef(null);
-  const location = useLocation(); // 🔑 Saber ruta actual
-
   useEffect(() => {
     function onKey(e) {
       if (e.key === 'Escape') setOpen(false);
@@ -44,9 +42,9 @@ export function Navbar({ role = 'Administrador' }) {
   return (
     <>
       {/* BARRA SUPERIOR - MOBILE */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white shadow">
+      <header className="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 shadow md:hidden">
 
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
 
           <button
             ref={openButtonRef}
@@ -60,14 +58,25 @@ export function Navbar({ role = 'Administrador' }) {
 
           </button>
 
-          <h2 className="text-xl font-extrabold font-montserrat cursor-pointer">Global League</h2>
+          <h2 className="truncate cursor-pointer font-montserrat text-xl font-extrabold">Global League</h2>
+
+        </div>
+
+        <div
+          id="userRoleMobile"
+          className="flex h-8 w-auto min-w-30 shrink-0 cursor-pointer select-none items-center justify-center rounded-4xl bg-green-400 px-3 text-xs hover:bg-green-600"
+        >
+
+          <span className="font-semibold text-white">{role}</span>
 
         </div>
 
       </header>
 
+      <div className="h-14 md:hidden" aria-hidden="true" />
+
       {/* BARRA LATERAL - ESCRITORIO */}
-      <aside className="hidden md:flex md:flex-col md:items-center md:justify-between md:w-55 md:h-screen md:py-6 md:px-4 md:border-r md:border-slate-200 md:shadow-sm bg-white">
+      <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:z-40 md:flex md:w-55 md:flex-col md:items-center md:justify-between md:border-r md:border-slate-200 md:bg-white md:px-4 md:py-6 md:shadow-sm">
         
         <div className="w-full">
 
@@ -113,7 +122,7 @@ export function Navbar({ role = 'Administrador' }) {
       {/* HEADER SUPERIOR - ESCRITORIO */}
       <header
         id="userHeader"
-        className="hidden md:flex md:fixed md:top-0 md:left-55 md:right-0 md:h-14 md:items-center md:justify-end md:border-b md:border-slate-300 md:px-5 bg-white z-0"
+        className="fixed left-55 right-0 top-0 z-50 hidden h-14 items-center justify-end border-b border-slate-300 bg-white px-5 md:flex"
       >
 
         <div
@@ -126,21 +135,6 @@ export function Navbar({ role = 'Administrador' }) {
         </div>
 
       </header>
-
-      {/* HEADER SUPERIOR - MOBILE */}
-      <div className="md:hidden absolute top-3 right-4 z-30">
-
-        <div
-          id="userRoleMobile"
-          className="h-8 w-30 text-xs bg-green-400 rounded-4xl flex items-center justify-center select-none cursor-pointer hover:bg-green-600"
-        >
-
-          <span className="font-semibold text-white">{role}</span>
-
-        </div>
-
-      </div>
-
 
       {/* SLIDER - MOBILE */}
       <div className={`fixed inset-0 z-40 md:hidden transition-opacity ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
