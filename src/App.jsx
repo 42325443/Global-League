@@ -6,6 +6,7 @@ import { Navbar } from "./components/Navbar.jsx";
 import Inicio from "./views/Inicio";
 import Torneos from "./views/Torneos";
 import Equipos from "./views/Equipos";
+import CrearEquipo from "./views/CrearEquipo";
 import Estadisticas from "./views/Estadisticas";
 import Arbitros from "./views/Arbitros";
 import Calendario from "./views/Calendario";
@@ -24,6 +25,7 @@ function App() {
             <Route path="/inicio" element={<Inicio />} />
             <Route path="/torneos" element={<Torneos />} />
             <Route path="/equipos" element={<Equipos />} />
+            <Route path="/crear-equipo" element={<CrearEquipo />} />
             <Route path="/estadisticas" element={<Estadisticas />} />
             <Route path="/arbitros" element={<Arbitros />} />
             <Route path="/calendario" element={<Calendario />} />

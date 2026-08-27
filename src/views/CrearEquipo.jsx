@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const disciplinas = {
   futbol: {
@@ -37,6 +38,8 @@ const categorias = [
 ];
 
 export default function CrearEquipo() {
+  const navigate = useNavigate();
+
   const [nombre, setNombre] = useState("");
   const [disciplina, setDisciplina] = useState("");
   const [modalidad, setModalidad] = useState("");
@@ -45,44 +48,45 @@ export default function CrearEquipo() {
   const [capitan, setCapitan] = useState("");
 
   const handleDisciplinaChange = (e) => {
-    const nuevaDisciplina = e.target.value;
-
-    setDisciplina(nuevaDisciplina);
-
-    // Cuando cambia la disciplina,
-    // reiniciamos la modalidad seleccionada.
+    setDisciplina(e.target.value);
     setModalidad("");
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
+    const equiposGuardados =
+      JSON.parse(localStorage.getItem("equipos")) || [];
+
     const nuevoEquipo = {
+      id: Date.now(),
       nombre,
-      disciplina,
+      disciplina: disciplinas[disciplina].nombre,
       modalidad,
       categoria,
       localidad,
       capitan,
+      jugadores: 0,
     };
 
-    console.log("Equipo creado:", nuevoEquipo);
+    const equiposActualizados = [
+      ...equiposGuardados,
+      nuevoEquipo,
+    ];
+
+    localStorage.setItem(
+      "equipos",
+      JSON.stringify(equiposActualizados)
+    );
 
     alert("Equipo creado correctamente");
 
-    // Por ahora limpiamos el formulario.
-    setNombre("");
-    setDisciplina("");
-    setModalidad("");
-    setCategoria("");
-    setLocalidad("");
-    setCapitan("");
+    navigate("/equipos");
   };
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
 
-      {/* Encabezado */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold">
           Crear equipo
@@ -93,7 +97,6 @@ export default function CrearEquipo() {
         </p>
       </div>
 
-      {/* Formulario */}
       <form
         onSubmit={handleSubmit}
         className="bg-white border border-gray-200 rounded-xl shadow-sm p-6"
@@ -111,7 +114,7 @@ export default function CrearEquipo() {
             onChange={(e) => setNombre(e.target.value)}
             placeholder="Ej: Los Tigres"
             required
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2"
           />
         </div>
 
@@ -125,7 +128,7 @@ export default function CrearEquipo() {
             value={disciplina}
             onChange={handleDisciplinaChange}
             required
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2"
           >
             <option value="">
               Seleccioná una disciplina
@@ -152,7 +155,7 @@ export default function CrearEquipo() {
             onChange={(e) => setModalidad(e.target.value)}
             required
             disabled={!disciplina}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 disabled:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 disabled:bg-gray-100"
           >
             <option value="">
               {disciplina
@@ -163,7 +166,10 @@ export default function CrearEquipo() {
             {disciplina &&
               disciplinas[disciplina].modalidades.map(
                 (modalidad) => (
-                  <option key={modalidad} value={modalidad}>
+                  <option
+                    key={modalidad}
+                    value={modalidad}
+                  >
                     {modalidad}
                   </option>
                 )
@@ -181,14 +187,17 @@ export default function CrearEquipo() {
             value={categoria}
             onChange={(e) => setCategoria(e.target.value)}
             required
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2"
           >
             <option value="">
               Seleccioná una categoría
             </option>
 
             {categorias.map((categoria) => (
-              <option key={categoria} value={categoria}>
+              <option
+                key={categoria}
+                value={categoria}
+              >
                 {categoria}
               </option>
             ))}
@@ -207,7 +216,7 @@ export default function CrearEquipo() {
             onChange={(e) => setLocalidad(e.target.value)}
             placeholder="Ej: Rosario"
             required
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2"
           />
         </div>
 
@@ -223,7 +232,7 @@ export default function CrearEquipo() {
             onChange={(e) => setCapitan(e.target.value)}
             placeholder="Ej: Juan Pérez"
             required
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2"
           />
         </div>
 
@@ -239,6 +248,7 @@ export default function CrearEquipo() {
 
           <button
             type="button"
+            onClick={() => navigate("/equipos")}
             className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100"
           >
             Cancelar
