@@ -67,7 +67,7 @@ export function Navbar({ role = 'Administrador' }) {
       </header>
 
       {/* BARRA LATERAL - ESCRITORIO */}
-      <aside className="hidden md:flex md:flex-col md:items-center md:justify-between md:w-55 md:h-screen md:py-6 md:px-4 md:border-r md:border-slate-200 md:shadow-sm bg-white">
+      <aside className="hidden md:flex md:flex-col md:items-center md:justify-between md:w-55 md:min-h-screen md:py-6 md:px-4 md:border-r md:border-slate-200 md:shadow-sm bg-white">
         
         <div className="w-full">
 

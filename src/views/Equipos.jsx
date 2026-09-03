@@ -62,16 +62,16 @@ export default function Equipos() {
   });
 
   return (
-    <div className="p-6">
+    <div className="p-2">
 
       {/* ENCABEZADO */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold">
+          <h1 className="text-2xl font-bold">
             Equipos
           </h1>
 
-          <p className="text-gray-500 mt-1">
+          <p className="text-slate-500 text-sm font-semibold mt-1">
             Administrá los equipos registrados en el torneo.
           </p>
         </div>
@@ -85,7 +85,7 @@ export default function Equipos() {
       </div>
 
       {/* BUSCADOR Y FILTRO */}
-      <div className="flex flex-col md:flex-row gap-3 mb-6">
+      <div className="flex flex-col md:flex-row gap-3 mb-3">
 
         <input
           type="text"
@@ -151,14 +151,14 @@ export default function Equipos() {
           >
 
             {/* INFORMACIÓN PRINCIPAL */}
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-2">
 
               <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-2xl">
                 ⚽
               </div>
 
               <div>
-                <h2 className="text-xl font-bold">
+                <h2 className="text-lg font-bold">
                   {equipo.nombre}
                 </h2>
 
@@ -174,7 +174,7 @@ export default function Equipos() {
             </div>
 
             {/* DETALLES */}
-            <div className="space-y-2 text-sm text-gray-600 mb-5">
+            <div className="text-sm text-gray-600 mb-5">
 
               <p>
                 <strong>Localidad:</strong>{" "}

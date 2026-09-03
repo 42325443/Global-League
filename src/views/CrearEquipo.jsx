@@ -85,21 +85,21 @@ export default function CrearEquipo() {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-2 max-w-3xl min-w-full mx-auto">
 
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">
+      <div className="mb-3">
+        <h1 className="text-2xl font-bold">
           Crear equipo
         </h1>
 
-        <p className="text-gray-500 mt-1">
+        <p className="text-slate-500 text-sm font-semibold mt-1">
           Completá los datos del nuevo equipo.
         </p>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="bg-white border border-gray-200 rounded-xl shadow-sm p-6"
+        className="bg-white border border-gray-200 rounded-xl shadow-sm p-4"
       >
 
         {/* Nombre */}
