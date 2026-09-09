@@ -142,10 +142,11 @@ export default function Torneos({ onNavegarACrearTorneo }) {
       <div className="mx-auto max-w-7xl">
         
         {/* HEADER DE SECCIÓN */}
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <header className="mb-2 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <span className="text-sm font-bold text-lime-700">Gestión Deportiva</span>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Torneos</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Gestión, posiciones y seguimiento de eventos deportivos.</p>
+            <p className="text-sm font-semibold text-slate-500 mt-0.5">Visualiza todos tus torneos, elegí el deporte y la disciplina que más te guste.</p>
           </div>
 
           <button
@@ -160,7 +161,7 @@ export default function Torneos({ onNavegarACrearTorneo }) {
         </header>
 
         {/* FILTROS */}
-        <section className="mb-6 rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
+        <section className="mb-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Deporte</label>
@@ -235,7 +236,7 @@ export default function Torneos({ onNavegarACrearTorneo }) {
                   <th scope="col" className="px-6 py-3.5">Inicio</th>
                   <th scope="col" className="px-6 py-3.5">Modalidad</th>
                   <th scope="col" className="px-6 py-3.5">Estado</th>
-                  <th scope="col" className="px-6 py-3.5 text-right">Acción</th>
+                  <th scope="col" className="px-6 py-3.5 text-start">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -250,12 +251,17 @@ export default function Torneos({ onNavegarACrearTorneo }) {
                       <td className="px-6 py-4 text-slate-500">{torneo.fechaInicio}</td>
                       <td className="px-6 py-4 text-slate-500">{torneo.modalidad}</td>
                       <td className="px-6 py-4">{getEstadoBadge(torneo.estado)}</td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-right flex flex-col items-center">
                         <button
                           onClick={() => abrirModal(torneo)}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 hover:text-slate-900 border border-slate-200 hover:border-slate-300 rounded-md px-3 py-1.5 transition-all bg-white shadow-xs"
+                          className="w-full inline-flex mb-2 items-center gap-1 text-xs font-semibold text-slate-700 hover:text-slate-900 border border-slate-200 hover:border-slate-300 rounded-md px-3 py-1.5 transition-all bg-white shadow-xs"
                         >
                           Ver detalle
+                        </button>
+                        <button
+                          className="w-full inline-flex items-center gap-1 text-xs font-semibold text-white hover:text-red-900 border border-red-200 hover:border-red-300 rounded-md px-3 py-1.5 transition-all bg-red-400 shadow-xs"
+                        >
+                          Eliminar
                         </button>
                       </td>
                     </tr>

@@ -62,17 +62,19 @@ export default function Equipos() {
   });
 
   return (
-    <div className="p-2">
+    <div>
 
       {/* ENCABEZADO */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
+          <span className="text-sm text-lime-700 font-bold">Listado de equipos</span>
+
           <h1 className="text-2xl font-bold">
             Equipos
           </h1>
 
           <p className="text-slate-500 text-sm font-semibold mt-1">
-            Administrá los equipos registrados en el torneo.
+            Administrá los equipos registrados y crea nuevos para poder anadirlos a tus futuros torneos.
           </p>
         </div>
 
