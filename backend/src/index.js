@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import pool from './config/db.js';
+import torneoRoutes from './routes/torneoRoutes.js';
 
 dotenv.config();
 
@@ -12,7 +13,10 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Ruta de prueba
+// Rutas
+app.use('/api/torneos', torneoRoutes);
+
+// Ruta de health check
 app.get('/api/health', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT 1 + 1 AS resultado');
