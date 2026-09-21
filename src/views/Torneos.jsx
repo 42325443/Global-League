@@ -17,14 +17,19 @@ export default function Torneos() {
   const [pestanaDetalle, setPestanaDetalle] = useState('principal');
   const [isDetalleModalVisible, setIsDetalleModalVisible] = useState(false);
 
-  // Cargar torneos guardados desde la Base de Datos
-  useEffect(() => {
+  // 1. Función extraída para poder recargar los torneos cuando queramos
+  const cargarTorneos = () => {
     fetch('http://localhost:3000/api/torneos')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) setTorneos(data);
+        if (Array.isArray(data)) setTorneos(data);
       })
       .catch((err) => console.error('Error al obtener torneos:', err));
+  };
+
+  // 2. useEffect llama a la función al abrir la pantalla
+  useEffect(() => {
+    cargarTorneos();
   }, []);
 
   const abrirModalDetalle = (torneo) => {
@@ -48,10 +53,10 @@ export default function Torneos() {
       if (res.ok) {
         setTorneos((prev) => prev.filter((t) => t.id !== id));
       } else {
-        setTorneos((prev) => prev.filter((t) => t.id !== id));
+        console.error('Error del servidor al eliminar el torneo');
       }
-    } catch {
-      setTorneos((prev) => prev.filter((t) => t.id !== id));
+    } catch (error) {
+      console.error('Error de red al eliminar el torneo:', error);
     }
   };
 
@@ -133,8 +138,8 @@ export default function Torneos() {
               >
                 <option value="">Todos los deportes</option>
                 <option value="Fútbol">Fútbol</option>
-                <option value="Básquet">Básquet</option>
-                <option value="Vóley">Vóley</option>
+                <option value="Basketball">Básquet</option>
+                <option value="Volleyball">Vóley</option>
               </select>
             </div>
 
@@ -162,7 +167,7 @@ export default function Torneos() {
               >
                 <option value="">Todas las modalidades</option>
                 <option value="Liga">Liga</option>
-                <option value="Eliminatoria">Eliminatoria</option>
+                <option value="Eliminación Directa">Eliminatoria</option>
               </select>
             </div>
 
@@ -260,8 +265,8 @@ export default function Torneos() {
             <div className="relative w-full max-w-3xl z-10">
               <TorneoWizard
                 onVolver={() => setIsWizardOpen(false)}
-                onTorneoCreado={(nuevoTorneoCreado) => {
-                  setTorneos((prev) => [nuevoTorneoCreado, ...prev]);
+                onTorneoCreado={() => {
+                  cargarTorneos(); // 3. Se dispara tras crear el torneo para refrescar todo
                   setIsWizardOpen(false);
                 }}
               />
@@ -329,7 +334,7 @@ export default function Torneos() {
               <div className="mt-4 max-h-[60vh] overflow-y-auto">
                 {pestanaDetalle === 'principal' && (
                   <div>
-                    {torneoSeleccionado.modalidad === 'Eliminatoria' ? (
+                    {torneoSeleccionado.modalidad === 'Eliminación Directa' || torneoSeleccionado.modalidad === 'Eliminatoria' ? (
                       /* BRACKETS */
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {torneoSeleccionado.bracket && torneoSeleccionado.bracket.length > 0 ? (

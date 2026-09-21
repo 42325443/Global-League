@@ -1,8 +1,9 @@
-import { Router } from 'express';
-import { getDisciplinas, getFormatos } from '../controllers/catalogosController.js';
+import express from 'express';
+import { getDeportes, getDisciplinas, getFormatos } from '../controllers/catalogosController.js';
 
-const router = Router();
+const router = express.Router();
 
+router.get('/deportes', getDeportes);
 router.get('/disciplinas', getDisciplinas);
 router.get('/formatos', getFormatos);
 

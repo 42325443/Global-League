@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import torneoRoutes from './routes/torneoRoutes.js';
 import catalogosRoutes from './routes/catalogosRoutes.js';
+import equipoRoutes from './routes/equipoRoutes.js';
 
 dotenv.config();
 
@@ -14,8 +15,9 @@ app.use(cors());
 app.use(express.json());
 
 // Rutas
-app.use('/api/torneos', torneoRoutes); // <-- Registro de ruta Torneos
+app.use('/api', torneoRoutes);
 app.use('/api/catalogos', catalogosRoutes); // <-- Registro de ruta Catalogos
+app.use('/api', equipoRoutes); // <-- Registro de ruta Equipos
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en el puerto ${PORT}`);
