@@ -1,12 +1,14 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import EquipoWizard from "../components/EquipoWizard";
 
 export default function Equipos() {
   const navigate = useNavigate();
 
   const [busqueda, setBusqueda] = useState("");
   const [categoria, setCategoria] = useState("Todas");
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   const equipos = [
     {
@@ -82,7 +84,7 @@ export default function Equipos() {
         </div>
 
         <button
-          onClick={() => navigate("/crear-equipo")}
+          onClick={() => setIsWizardOpen(true)}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
         >
           + Crear equipo
@@ -240,6 +242,24 @@ export default function Equipos() {
             Probá con otro nombre o categoría.
           </p>
 
+        </div>
+      )}
+
+      {isWizardOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            onClick={() => setIsWizardOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-3xl">
+            <EquipoWizard
+              onVolver={() => setIsWizardOpen(false)}
+              onEquipoCreado={(equipo) => {
+                console.log("Equipo creado:", equipo);
+                setIsWizardOpen(false);
+              }}
+            />
+          </div>
         </div>
       )}
 
