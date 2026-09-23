@@ -16,6 +16,9 @@ export default function Torneos() {
   const [torneoSeleccionado, setTorneoSeleccionado] = useState(null);
   const [pestanaDetalle, setPestanaDetalle] = useState('principal');
   const [isDetalleModalVisible, setIsDetalleModalVisible] = useState(false);
+  const [torneoAEliminar, setTorneoAEliminar] = useState(null);
+  const [eliminandoTorneo, setEliminandoTorneo] = useState(false);
+  const [errorEliminacion, setErrorEliminacion] = useState('');
 
   // 1. Función extraída para poder recargar los torneos cuando queramos
   const cargarTorneos = () => {
@@ -43,22 +46,63 @@ export default function Torneos() {
     setTimeout(() => setTorneoSeleccionado(null), 200);
   };
 
-  const eliminarTorneo = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar este torneo?')) return;
+  const abrirConfirmacionEliminacion = (torneo) => {
+    setErrorEliminacion('');
+    setTorneoAEliminar(torneo);
+  };
+
+  const cerrarConfirmacionEliminacion = () => {
+    if (eliminandoTorneo) return;
+    setTorneoAEliminar(null);
+    setErrorEliminacion('');
+  };
+
+  const formatearFecha = (valor) => {
+    if (!valor) return 'Sin definir';
+    const fecha = new Date(`${String(valor).slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(fecha.getTime())) return String(valor);
+    return new Intl.DateTimeFormat('es-AR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    }).format(fecha);
+  };
+
+  const eliminarTorneo = async () => {
+    if (!torneoAEliminar || eliminandoTorneo) return;
+
+    setEliminandoTorneo(true);
+    setErrorEliminacion('');
 
     try {
-      const res = await fetch(`http://localhost:3000/api/torneos/${id}`, {
+      const res = await fetch(`http://localhost:3000/api/torneos/${torneoAEliminar.id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
-        setTorneos((prev) => prev.filter((t) => t.id !== id));
+        setTorneos((prev) => prev.filter((t) => t.id !== torneoAEliminar.id));
+        setTorneoAEliminar(null);
       } else {
         console.error('Error del servidor al eliminar el torneo');
+        setErrorEliminacion('No se pudo eliminar el torneo. Intentá nuevamente.');
       }
     } catch (error) {
       console.error('Error de red al eliminar el torneo:', error);
+      setErrorEliminacion('No se pudo conectar con el servidor. Revisá tu conexión e intentá nuevamente.');
+    } finally {
+      setEliminandoTorneo(false);
     }
   };
+
+  useEffect(() => {
+    if (!torneoAEliminar || eliminandoTorneo) return undefined;
+
+    const manejarEscape = (event) => {
+      if (event.key === 'Escape') cerrarConfirmacionEliminacion();
+    };
+
+    window.addEventListener('keydown', manejarEscape);
+    return () => window.removeEventListener('keydown', manejarEscape);
+  }, [torneoAEliminar, eliminandoTorneo]);
 
   const torneosFiltrados = useMemo(() => {
     return torneos.filter((torneo) => {
@@ -237,7 +281,7 @@ export default function Torneos() {
                             Ver detalle
                           </button>
                           <button
-                            onClick={() => eliminarTorneo(torneo.id)}
+                            onClick={() => abrirConfirmacionEliminacion(torneo)}
                             className="text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 rounded-md px-3 py-1.5 bg-white cursor-pointer"
                           >
                             Eliminar
@@ -271,6 +315,99 @@ export default function Torneos() {
                 }}
               />
             </div>
+          </div>
+        )}
+
+        {/* Confirmación de eliminación */}
+        {torneoAEliminar && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4">
+            <button
+              type="button"
+              aria-label="Cerrar confirmación"
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm"
+              onClick={cerrarConfirmacionEliminacion}
+              disabled={eliminandoTorneo}
+            />
+            <section
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="confirmar-eliminacion-titulo"
+              aria-describedby="confirmar-eliminacion-descripcion"
+              className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10"
+            >
+              <div className="p-6 sm:p-7">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600 ring-1 ring-red-100">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-6 w-6">
+                      <path d="M12 8v4m0 4h.01M10.3 3.86 1.82 18.5A2 2 0 0 0 3.55 21h16.9a2 2 0 0 0 1.73-2.5L13.7 3.86a2 2 0 0 0-3.46 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h2 id="confirmar-eliminacion-titulo" className="text-lg font-bold text-slate-900">
+                      ¿Eliminar este torneo?
+                    </h2>
+                    <p id="confirmar-eliminacion-descripcion" className="mt-1 text-sm leading-6 text-slate-500">
+                      Se eliminará este torneo. Esta acción no se puede deshacer.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="truncate font-bold text-slate-900" title={torneoAEliminar.nombre}>
+                    {torneoAEliminar.nombre || 'Torneo sin nombre'}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {[torneoAEliminar.deporte, torneoAEliminar.disciplina].filter(Boolean).join(' · ') || 'Deporte sin definir'}
+                  </p>
+                  <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 border-t border-slate-200 pt-4 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Fechas</dt>
+                      <dd className="mt-1 font-medium text-slate-700">
+                        {formatearFecha(torneoAEliminar.fechaInicio)} – {formatearFecha(torneoAEliminar.fechaFin)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Sede</dt>
+                      <dd className="mt-1 font-medium text-slate-700">{torneoAEliminar.ubicacion || 'Sin asignar'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Formato</dt>
+                      <dd className="mt-1 font-medium text-slate-700">{torneoAEliminar.modalidad || 'Sin definir'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Equipos inscriptos</dt>
+                      <dd className="mt-1 font-medium text-slate-700">{torneoAEliminar.equiposInscriptos ?? 0}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                {errorEliminacion && (
+                  <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {errorEliminacion}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/70 px-6 py-4 sm:flex-row sm:justify-end sm:px-7">
+                <button
+                  type="button"
+                  onClick={cerrarConfirmacionEliminacion}
+                  disabled={eliminandoTorneo}
+                  autoFocus
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={eliminarTorneo}
+                  disabled={eliminandoTorneo}
+                  className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {eliminandoTorneo ? 'Eliminando…' : 'Eliminar torneo'}
+                </button>
+              </div>
+            </section>
           </div>
         )}
 
