@@ -1,70 +1,117 @@
 
 // src/components/EquipoWizard.jsx
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 
 export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
   const [paso, setPaso] = useState(1);
+  const [guardando, setGuardando] = useState(false);
+  const [errorGuardado, setErrorGuardado] = useState("");
 
   const [formData, setFormData] = useState({
     nombreEquipo: "",
-    deporte: "",
-    disciplina: "",
-    categoria: "",
+    idDeporte: "",
+    idDisciplina: "",
     localidad: "",
     capitan: "",
   });
+
+  const [deportes, setDeportes] = useState([]);
+  const [disciplinas, setDisciplinas] = useState([]);
+  const [cargandoDeportes, setCargandoDeportes] = useState(true);
+  const [cargandoDisciplinas, setCargandoDisciplinas] = useState(false);
+  const [errorDeportes, setErrorDeportes] = useState("");
+  const [errorDisciplinas, setErrorDisciplinas] = useState("");
 
   const [jugadores, setJugadores] = useState([]);
 
   const [nuevoJugador, setNuevoJugador] = useState({
     nombre: "",
+    apellido: "",
     dni: "",
   });
 
-  // Deportes disponibles
-  const deportes = [
-    {
-      id: 1,
-      nombre: "Fútbol",
-    },
-    {
-      id: 2,
-      nombre: "Básquet",
-    },
-    {
-      id: 3,
-      nombre: "Vóley",
-    },
-  ];
+  useEffect(() => {
+    let cancelado = false;
 
-  // Disciplinas / modalidades
-  const disciplinas = {
-    Fútbol: [
-      "Fútbol 5",
-      "Fútbol 7",
-      "Fútbol 9",
-      "Fútbol 11",
-    ],
-    Básquet: [
-      "Básquet 5v5",
-      "Básquet 3x3",
-    ],
-    Vóley: [
-      "Vóley 6v6",
-      "Vóley Playa 2v2",
-    ],
-  };
+    fetch("http://localhost:3000/api/catalogos/deportes")
+      .then((response) => {
+        if (!response.ok) throw new Error("No se pudieron cargar los deportes");
+        return response.json();
+      })
+      .then((data) => {
+        if (!Array.isArray(data) || data.length === 0) throw new Error("No hay deportes disponibles");
 
-  // Categorías
-  const categorias = [
-    "Sub 13",
-    "Sub 18",
-    "E",
-    "D",
-    "C",
-    "B",
-    "A",
-  ];
+        if (!cancelado) {
+          setDeportes(data.map((deporte) => ({
+            id: deporte.idDeporte ?? deporte.id_deporte ?? deporte.id,
+            nombre: deporte.nombreDeporte ?? deporte.nombre_deporte ?? deporte.nombre,
+          })));
+        }
+      })
+      .catch(() => {
+        if (!cancelado) {
+          setDeportes([]);
+          setErrorDeportes("No se pudo cargar el catálogo de deportes. Verificá que el backend esté activo.");
+        }
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoDeportes(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!formData.idDeporte) {
+      return undefined;
+    }
+
+    let cancelado = false;
+
+    const cargarDisciplinas = async () => {
+      try {
+        const response = await fetch(
+          `http://localhost:3000/api/catalogos/disciplinas?idDeporte=${encodeURIComponent(formData.idDeporte)}`
+        );
+        if (!response.ok) throw new Error("No se pudieron cargar las disciplinas");
+
+        const data = await response.json();
+        if (!Array.isArray(data)) throw new Error("Respuesta de disciplinas inválida");
+
+        const disciplinasFiltradas = data.filter(
+          (disciplina) => Number(disciplina.idDeporte ?? disciplina.id_deporte) === Number(formData.idDeporte)
+        );
+
+        if (!cancelado) {
+          const disciplinasNormalizadas = disciplinasFiltradas.map((disciplina) => ({
+            id: disciplina.idDisciplina ?? disciplina.id_disciplina ?? disciplina.id,
+            nombre: disciplina.nombreDisciplina ?? disciplina.nombre_disciplina ?? disciplina.nombre,
+          }));
+          setDisciplinas(disciplinasNormalizadas);
+          setErrorDisciplinas(
+            disciplinasNormalizadas.length === 0
+              ? "No hay disciplinas cargadas para este deporte."
+              : ""
+          );
+        }
+      } catch {
+        if (!cancelado) {
+          setDisciplinas([]);
+          setErrorDisciplinas("No se pudieron cargar las disciplinas. Verificá que el backend esté activo.");
+        }
+      } finally {
+        if (!cancelado) setCargandoDisciplinas(false);
+      }
+    };
+
+    cargarDisciplinas();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [formData.idDeporte]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -76,30 +123,36 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
   };
 
   const seleccionarDeporte = (deporte) => {
+    if (String(formData.idDeporte) === String(deporte.id)) return;
+
     setFormData((prev) => ({
       ...prev,
-      deporte: deporte.nombre,
-      disciplina: "",
+      idDeporte: String(deporte.id),
+      idDisciplina: "",
     }));
+    setCargandoDisciplinas(true);
+    setDisciplinas([]);
+    setErrorDisciplinas("");
   };
 
   const seleccionarDisciplina = (disciplina) => {
     setFormData((prev) => ({
       ...prev,
-      disciplina,
+      idDisciplina: String(disciplina.id),
     }));
   };
 
   const agregarJugador = (e) => {
     e.preventDefault();
 
-    if (!nuevoJugador.nombre.trim()) {
+    if (!nuevoJugador.nombre.trim() || !nuevoJugador.apellido.trim()) {
       return;
     }
 
     const jugador = {
       id: Date.now(),
       nombre: nuevoJugador.nombre.trim(),
+      apellido: nuevoJugador.apellido.trim(),
       dni: nuevoJugador.dni.trim(),
     };
 
@@ -107,6 +160,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
 
     setNuevoJugador({
       nombre: "",
+      apellido: "",
       dni: "",
     });
   };
@@ -117,38 +171,51 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
     );
   };
 
-  const handleFinalizar = (e) => {
+  const handleFinalizar = async (e) => {
     e.preventDefault();
+    if (guardando) return;
 
-    const equipoNuevo = {
-      id: Date.now(),
-      nombre: formData.nombreEquipo,
-      disciplina: formData.deporte,
-      modalidad: formData.disciplina,
-      categoria: formData.categoria,
-      localidad: formData.localidad,
-      capitan: formData.capitan,
-      jugadores: jugadores.length,
-      listaJugadores: jugadores,
-    };
+    setGuardando(true);
+    setErrorGuardado("");
 
-    if (onEquipoCreado) {
-      onEquipoCreado(equipoNuevo);
-    }
+    try {
+      const response = await fetch("http://localhost:3000/api/equipos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombreEquipo: formData.nombreEquipo.trim(),
+          idDisciplina: Number(formData.idDisciplina),
+          localidad: formData.localidad.trim(),
+          capitan: formData.capitan.trim(),
+          jugadores: jugadores.map(({ nombre, apellido, dni }) => ({
+            nombre,
+            apellido,
+            dni,
+          })),
+        }),
+      });
 
-    if (onVolver) {
-      onVolver();
+      const resultado = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(resultado.error || "No se pudo guardar el equipo y sus jugadores.");
+      }
+
+      if (onEquipoCreado) onEquipoCreado(resultado);
+      if (onVolver) onVolver();
+    } catch (error) {
+      setErrorGuardado(error.message || "No se pudo conectar con el servidor.");
+    } finally {
+      setGuardando(false);
     }
   };
 
   const puedeAvanzarPaso1 =
-    formData.deporte && formData.disciplina;
+    formData.idDeporte && formData.idDisciplina;
 
   const puedeAvanzarPaso2 =
-    formData.nombreEquipo &&
-    formData.categoria &&
-    formData.localidad &&
-    formData.capitan;
+    formData.nombreEquipo.trim() &&
+    formData.localidad.trim() &&
+    formData.capitan.trim();
 
   return (
     <div className="w-full max-w-3xl mx-auto bg-slate-900 text-slate-100 p-6 md:p-8 rounded-2xl shadow-2xl border border-slate-800">
@@ -169,6 +236,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
         <button
           type="button"
           onClick={onVolver}
+          disabled={guardando}
           className="text-slate-400 hover:text-white transition-colors cursor-pointer text-sm font-medium"
         >
           ✕ Cancelar
@@ -205,61 +273,58 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
               1. Selecciona el Deporte
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {cargandoDeportes ? (
+              <p className="text-sm text-slate-400">Cargando deportes...</p>
+            ) : errorDeportes ? (
+              <p role="alert" className="text-sm text-red-400">{errorDeportes}</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {deportes.map((deporte) => {
+                  const seleccionado =
+                    String(formData.idDeporte) === String(deporte.id);
 
-              {deportes.map((deporte) => {
-
-                const seleccionado =
-                  formData.deporte === deporte.nombre;
-
-                return (
-                  <button
-                    key={deporte.id}
-                    type="button"
-                    onClick={() =>
-                      seleccionarDeporte(deporte)
-                    }
-                    className={`p-4 rounded-xl border text-center transition-all cursor-pointer ${
-                      seleccionado
-                        ? "border-blue-500 bg-blue-500/10 text-white font-bold"
-                        : "border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700 hover:text-slate-200"
-                    }`}
-                  >
-                    {deporte.nombre}
-                  </button>
-                );
-              })}
-
-            </div>
+                  return (
+                    <button
+                      key={deporte.id}
+                      type="button"
+                      onClick={() => seleccionarDeporte(deporte)}
+                      className={`p-4 rounded-xl border text-center transition-all cursor-pointer ${
+                        seleccionado
+                          ? "border-blue-500 bg-blue-500/10 text-white font-bold"
+                          : "border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                      }`}
+                    >
+                      {deporte.nombre}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
           </div>
 
           {/* DISCIPLINAS */}
 
-          {formData.deporte && (
+          {formData.idDeporte && (
             <div>
 
               <h3 className="text-lg font-semibold text-slate-200 mb-3">
                 2. Selecciona la Disciplina
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
-                {disciplinas[formData.deporte]?.map(
-                  (disciplina) => {
-
+              {cargandoDisciplinas ? (
+                <p className="text-sm text-slate-400">Cargando disciplinas...</p>
+              ) : disciplinas.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {disciplinas.map((disciplina) => {
                     const seleccionado =
-                      formData.disciplina === disciplina;
+                      String(formData.idDisciplina) === String(disciplina.id);
 
                     return (
                       <button
-                        key={disciplina}
+                        key={disciplina.id}
                         type="button"
-                        onClick={() =>
-                          seleccionarDisciplina(
-                            disciplina
-                          )
-                        }
+                        onClick={() => seleccionarDisciplina(disciplina)}
                         className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                           seleccionado
                             ? "border-blue-500 bg-blue-500/10 text-white font-bold"
@@ -267,14 +332,20 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
                         }`}
                       >
                         <span className="block text-sm font-semibold">
-                          {disciplina}
+                          {disciplina.nombre}
                         </span>
                       </button>
                     );
-                  }
-                )}
-
-              </div>
+                  })}
+                </div>
+              ) : (
+                <p
+                  role={errorDisciplinas ? "alert" : undefined}
+                  className={`text-sm ${errorDisciplinas ? "text-red-400" : "text-slate-400"}`}
+                >
+                  {errorDisciplinas || "No hay disciplinas disponibles para este deporte."}
+                </p>
+              )}
 
             </div>
           )}
@@ -309,38 +380,6 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
               placeholder="Ej: Los Tigres"
               className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
             />
-
-          </div>
-
-          {/* CATEGORIA */}
-
-          <div>
-
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              Categoría *
-            </label>
-
-            <select
-              name="categoria"
-              value={formData.categoria}
-              onChange={handleChange}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
-            >
-
-              <option value="">
-                Seleccionar categoría
-              </option>
-
-              {categorias.map((categoria) => (
-                <option
-                  key={categoria}
-                  value={categoria}
-                >
-                  {categoria}
-                </option>
-              ))}
-
-            </select>
 
           </div>
 
@@ -411,16 +450,29 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
             className="p-4 bg-slate-800/80 border border-slate-700 rounded-xl space-y-3"
           >
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
 
               <input
                 type="text"
-                placeholder="Nombre y apellido"
+                placeholder="Nombre"
                 value={nuevoJugador.nombre}
                 onChange={(e) =>
                   setNuevoJugador((prev) => ({
                     ...prev,
                     nombre: e.target.value,
+                  }))
+                }
+                className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+              />
+
+              <input
+                type="text"
+                placeholder="Apellido"
+                value={nuevoJugador.apellido}
+                onChange={(e) =>
+                  setNuevoJugador((prev) => ({
+                    ...prev,
+                    apellido: e.target.value,
                   }))
                 }
                 className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
@@ -443,7 +495,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
 
             <button
               type="submit"
-              disabled={!nuevoJugador.nombre.trim()}
+              disabled={!nuevoJugador.nombre.trim() || !nuevoJugador.apellido.trim()}
               className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg cursor-pointer"
             >
               + Agregar jugador
@@ -483,7 +535,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
                     <div>
 
                       <p className="text-sm font-semibold text-slate-200">
-                        {jugador.nombre}
+                        {jugador.nombre} {jugador.apellido}
                       </p>
 
                       {jugador.dni && (
@@ -528,6 +580,12 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
       {/* ========================================= */}
       {/* BOTONES DE NAVEGACIÓN */}
       {/* ========================================= */}
+
+      {errorGuardado && (
+        <p role="alert" className="mt-6 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {errorGuardado}
+        </p>
+      )}
 
       <div className="flex justify-between items-center mt-8 pt-4 border-t border-slate-800">
 
@@ -574,17 +632,16 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
           <button
             type="button"
             onClick={handleFinalizar}
-            disabled={
-              !formData.nombreEquipo ||
-              !formData.deporte ||
-              !formData.disciplina ||
-              !formData.categoria ||
-              !formData.localidad ||
-              !formData.capitan
+            disabled={guardando ||
+              !formData.nombreEquipo.trim() ||
+              !formData.idDeporte ||
+              !formData.idDisciplina ||
+              !formData.localidad.trim() ||
+              !formData.capitan.trim()
             }
             className="px-5 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
-            Guardar y Crear Equipo
+            {guardando ? "Guardando..." : "Guardar y Crear Equipo"}
           </button>
 
         )}

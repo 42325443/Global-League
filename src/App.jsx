@@ -6,6 +6,7 @@ import { Navbar } from "./components/Navbar.jsx";
 import Inicio from "./views/Inicio";
 import Torneos from "./views/Torneos";
 import Equipos from "./views/Equipos";
+import EquipoDetalle from "./views/EquipoDetalle";
 import CrearEquipo from "./views/CrearEquipo";
 import Estadisticas from "./views/Estadisticas";
 import Arbitros from "./views/Arbitros";
@@ -41,6 +42,11 @@ function App() {
             <Route
               path="/equipos"
               element={<Equipos />}
+            />
+
+            <Route
+              path="/equipos/:id"
+              element={<EquipoDetalle />}
             />
 
             {/* Crear equipo */}

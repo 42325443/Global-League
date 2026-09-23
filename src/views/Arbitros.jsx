@@ -1,7 +1,8 @@
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import ArbitroWizard from "../components/ArbitroWizard";
 
 export default function Arbitros() {
-  const navigate = useNavigate();
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -17,7 +18,7 @@ export default function Arbitros() {
         </div>
 
         <button
-          onClick={() => navigate("/crear-arbitro")}
+          onClick={() => setIsWizardOpen(true)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-semibold transition"
         >
           + Crear árbitro
@@ -29,6 +30,24 @@ export default function Arbitros() {
           Todavía no hay árbitros registrados.
         </p>
       </div>
+
+      {isWizardOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            onClick={() => setIsWizardOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-3xl">
+            <ArbitroWizard
+              onVolver={() => setIsWizardOpen(false)}
+              onArbitroCreado={(arbitro) => {
+                console.log("Árbitro creado:", arbitro);
+                setIsWizardOpen(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
