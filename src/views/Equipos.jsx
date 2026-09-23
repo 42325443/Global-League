@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -67,7 +68,9 @@ export default function Equipos() {
       {/* ENCABEZADO */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <span className="text-sm text-lime-700 font-bold">Listado de equipos</span>
+          <span className="text-sm text-lime-700 font-bold">
+            Listado de equipos
+          </span>
 
           <h1 className="text-2xl font-bold">
             Equipos
@@ -199,6 +202,7 @@ export default function Equipos() {
             <div className="flex gap-2">
 
               <button
+                onClick={() => navigate(`/equipos/${equipo.id}`)}
                 className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
               >
                 Ver equipo
