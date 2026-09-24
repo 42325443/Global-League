@@ -25,8 +25,8 @@ export const getDisciplinas = async (req, res) => {
     let sql = 'SELECT * FROM disciplina';
     const params = [];
     if (deporteId) {
-      sql += ' WHERE idDeporte = ? OR id_deporte = ?';
-      params.push(deporteId, deporteId);
+      sql += ' WHERE idDeporte = ?';
+      params.push(deporteId);
     }
 
     const [rows] = await pool.query(sql, params);
