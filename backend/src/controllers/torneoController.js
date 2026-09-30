@@ -18,7 +18,7 @@ export const getTorneos = async (req, res) => {
     let rows;
     try {
       [rows] = await pool.query(query);
-    } catch (dbError) {
+    } catch {
       const fallbackQuery = `
         SELECT 
           t.idTorneo, t.nombreTorneo, t.idDisciplina, t.idFormato, t.fechaInicio, 
@@ -63,8 +63,12 @@ export const createTorneo = async (req, res) => {
   
   const limiteEquipos = cantidadEquiposMax === 'Sin limite' ? null : (cantidadEquiposMax || cantidadEquipos || null);
 
+  let connection;
   try {
-    const [result] = await pool.query(
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [result] = await connection.query(
       `INSERT INTO torneo (nombreTorneo, idDisciplina, idFormato, fechaInicio, descripcionTorneo, fechaFin, ubicacion, cantidadEquipos) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [nombreTorneo, idDisciplina, idFormato, fechaInicio, descripcionTorneo || null, fechaFin || null, ubicacion || null, limiteEquipos]
@@ -74,13 +78,21 @@ export const createTorneo = async (req, res) => {
 
     if (Array.isArray(equiposIds) && equiposIds.length > 0) {
       for (const idEquipo of equiposIds) {
-        await pool.query('INSERT INTO torneo_equipo (idTorneo, idEquipo) VALUES (?, ?)', [nuevoIdTorneo, idEquipo]).catch(() => {});
+        await connection.query(
+          'INSERT INTO torneo_equipo (idTorneo, idEquipo) VALUES (?, ?)',
+          [nuevoIdTorneo, idEquipo]
+        );
       }
     }
 
+    await connection.commit();
     res.status(201).json({ id: nuevoIdTorneo, message: 'Torneo creado con éxito' });
   } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('Error al crear el torneo:', error);
     res.status(500).json({ error: 'Error al crear el torneo', details: error.message });
+  } finally {
+    connection?.release();
   }
 };
 

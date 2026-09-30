@@ -1,6 +1,5 @@
--- =========================================================
--- INSERCIÓN DE DATOS INICIALES (SEED DATA)
--- =========================================================
+-- Datos iniciales de catálogos para Global League.
+-- Ejecutar después de schema.sql sobre una base recién creada.
 
 USE global_league;
 
@@ -24,3 +23,6 @@ INSERT INTO disciplina (idDeporte, nombreDisciplina, descripcionDisciplina, cant
 INSERT INTO formato (nombreFormato, descripcionFormato, imagen_url) VALUES 
 ('Liga', 'Fase regular todos contra todos por puntos', NULL),
 ('Eliminación Directa', 'Llaves eliminatorias a partido único', NULL);
+
+-- equipo, jugador y torneo_equipo no reciben filas de ejemplo:
+-- son datos creados por cada organizador desde la aplicación.

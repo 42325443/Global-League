@@ -1,10 +1,12 @@
 // src/components/TorneoWizard.jsx
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
   const [paso, setPaso] = useState(1);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState(null);
+  const [errorEquipos, setErrorEquipos] = useState('');
+  const [cargandoEquipos, setCargandoEquipos] = useState(true);
 
   // Catálogos desde el backend
   const [deportes, setDeportes] = useState([]);
@@ -14,8 +16,6 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
   // Estado para la gestión de equipos
   const [equiposDisponibles, setEquiposDisponibles] = useState([]);
   const [equiposSeleccionados, setEquiposSeleccionados] = useState([]);
-  const [nuevoEquipoNombre, setNuevoEquipoNombre] = useState('');
-  const [mostrandoCrearEquipo, setMostrandoCrearEquipo] = useState(false);
 
   // Estado del formulario
   const [formData, setFormData] = useState({
@@ -29,6 +29,10 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
     ubicacion: 'Campus Rosario',
     cantidadEquiposMax: 12
   });
+
+  const equiposDelDeporte = equiposDisponibles.filter(
+    (equipo) => String(equipo.idDeporte) === String(formData.idDeporte)
+  );
 
   useEffect(() => {
     fetch('http://localhost:3000/api/catalogos/deportes')
@@ -100,16 +104,16 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
 
   useEffect(() => {
     fetch('http://localhost:3000/api/equipos')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setEquiposDisponibles(data))
-      .catch(() => {
-        setEquiposDisponibles([
-          { id: 101, nombre: 'Deportivo Rosario' },
-          { id: 102, nombre: 'Atlético Central' },
-          { id: 103, nombre: 'Unión del Sur' },
-          { id: 104, nombre: 'Titanes FC' }
-        ]);
-      });
+      .then((res) => {
+        if (!res.ok) throw new Error('No se pudieron cargar los equipos.');
+        return res.json();
+      })
+      .then((data) => {
+        if (!Array.isArray(data)) throw new Error('La respuesta de equipos no es válida.');
+        setEquiposDisponibles(data);
+      })
+      .catch((fetchError) => setErrorEquipos(fetchError.message || 'No se pudieron cargar los equipos.'))
+      .finally(() => setCargandoEquipos(false));
   }, []);
 
   const handleChangeInput = (e) => {
@@ -118,26 +122,18 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
   };
 
   const toggleSeleccionarEquipo = (equipo) => {
-    if (equiposSeleccionados.some((e) => e.id === equipo.id)) {
-      setEquiposSeleccionados(equiposSeleccionados.filter((e) => e.id !== equipo.id));
-    } else {
-      setEquiposSeleccionados([...equiposSeleccionados, equipo]);
-    }
+    setEquiposSeleccionados((seleccionados) => (
+      seleccionados.some((e) => e.id === equipo.id)
+        ? seleccionados.filter((e) => e.id !== equipo.id)
+        : [...seleccionados, equipo]
+    ));
   };
 
-  const handleCrearEquipoRapido = (e) => {
-    e.preventDefault();
-    if (!nuevoEquipoNombre.trim()) return;
-
-    const equipoNuevo = {
-      id: Date.now(),
-      nombre: nuevoEquipoNombre.trim()
-    };
-
-    setEquiposDisponibles((prev) => [...prev, equipoNuevo]);
-    setEquiposSeleccionados((prev) => [...prev, equipoNuevo]);
-    setNuevoEquipoNombre('');
-    setMostrandoCrearEquipo(false);
+  const handleSeleccionDeporte = (deporte) => {
+    setFormData((prev) => ({ ...prev, idDeporte: deporte.id_deporte, idDisciplina: '' }));
+    setEquiposSeleccionados((seleccionados) => (
+      seleccionados.filter((equipo) => String(equipo.idDeporte) === String(deporte.id_deporte))
+    ));
   };
 
   const handleFinalizar = async (e) => {
@@ -164,35 +160,13 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) throw new Error();
+      const resultado = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(resultado.error || 'No se pudo guardar el torneo.');
 
-      const torneoCreado = await response.json();
-      if (onTorneoCreado) onTorneoCreado(torneoCreado);
+      if (onTorneoCreado) onTorneoCreado(resultado);
       if (onVolver) onVolver();
-    } catch {
-      const depNombre = deportes.find((d) => String(d.id_deporte) === String(formData.idDeporte))?.nombre || 'Fútbol';
-      const discNombre = disciplinas.find((d) => String(d.id_disciplina) === String(formData.idDisciplina))?.nombre || 'Fútbol 11';
-      const fmtNombre = formatos.find((f) => String(f.id_formato) === String(formData.idFormato))?.nombre || 'Liga';
-
-      const torneoLocal = {
-        id: Date.now(),
-        nombre: formData.nombreTorneo,
-        deporte: depNombre,
-        disciplina: discNombre,
-        fechaInicio: formData.fechaInicio,
-        fechaFin: formData.fechaFin,
-        ubicacion: formData.ubicacion || 'Sin definir',
-        modalidad: fmtNombre,
-        estado: 'Próximo',
-        equiposInscriptos: equiposSeleccionados.length,
-        cantidadEquiposMax: formData.cantidadEquiposMax === 'Sin limite' ? 'Sin limite' : Number(formData.cantidadEquiposMax),
-        posiciones: [],
-        bracket: [],
-        estadisticas: { goleadores: [], asistidores: [], amarillas: [] }
-      };
-
-      if (onTorneoCreado) onTorneoCreado(torneoLocal);
-      if (onVolver) onVolver();
+    } catch (saveError) {
+      setError(saveError.message || 'No se pudo conectar con el servidor.');
     } finally {
       setCargando(false);
     }
@@ -236,7 +210,7 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
                   <button
                     key={dep.id_deporte}
                     type="button"
-                    onClick={() => setFormData((p) => ({ ...p, idDeporte: dep.id_deporte, idDisciplina: '' }))}
+                    onClick={() => handleSeleccionDeporte(dep)}
                     className={`p-4 rounded-xl border text-center transition-all cursor-pointer ${
                       selected
                         ? 'border-blue-500 bg-blue-500/10 text-white font-bold'
@@ -308,56 +282,44 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-lg font-semibold text-slate-200">Equipos Participantes</h3>
-              <p className="text-xs text-slate-400">Inscribe equipos al torneo (opcional).</p>
+              <p className="text-xs text-slate-400">Seleccioná equipos ya registrados en el sistema.</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setMostrandoCrearEquipo(!mostrandoCrearEquipo)}
-              className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-lg cursor-pointer"
-            >
-              {mostrandoCrearEquipo ? 'Cancelar' : '+ Crear Equipo'}
-            </button>
           </div>
 
-          {mostrandoCrearEquipo && (
-            <div className="p-4 bg-slate-800/80 border border-slate-700 rounded-xl flex gap-2">
-              <input
-                type="text"
-                placeholder="Nombre del nuevo equipo..."
-                value={nuevoEquipoNombre}
-                onChange={(e) => setNuevoEquipoNombre(e.target.value)}
-                className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
-              />
-              <button
-                type="button"
-                onClick={handleCrearEquipoRapido}
-                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg cursor-pointer"
-              >
-                Agregar
-              </button>
+          {cargandoEquipos ? (
+            <p className="text-sm text-slate-400">Cargando equipos...</p>
+          ) : errorEquipos ? (
+            <p role="alert" className="text-sm text-red-400">{errorEquipos}</p>
+          ) : equiposDisponibles.length === 0 ? (
+            <p className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300">
+              Todavía no hay equipos guardados. Creá un equipo desde la pestaña Equipos y volvé a este paso.
+            </p>
+          ) : equiposDelDeporte.length === 0 ? (
+            <p className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300">
+              No hay equipos guardados para el deporte seleccionado.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-56 overflow-y-auto pr-1">
+              {equiposDelDeporte.map((eq) => {
+                const seleccionado = equiposSeleccionados.some((e) => e.id === eq.id);
+                return (
+                  <button
+                    key={eq.id}
+                    type="button"
+                    onClick={() => toggleSeleccionarEquipo(eq)}
+                    className={`p-3 rounded-lg border text-left text-xs font-semibold transition-all cursor-pointer flex justify-between items-center ${
+                      seleccionado
+                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
+                        : 'border-slate-800 bg-slate-800/30 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span>{eq.nombre || eq.nombreEquipo}</span>
+                    {seleccionado && <span>✓</span>}
+                  </button>
+                );
+              })}
             </div>
           )}
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-56 overflow-y-auto pr-1">
-            {equiposDisponibles.map((eq) => {
-              const seleccionado = equiposSeleccionados.some((e) => e.id === eq.id);
-              return (
-                <button
-                  key={eq.id}
-                  type="button"
-                  onClick={() => toggleSeleccionarEquipo(eq)}
-                  className={`p-3 rounded-lg border text-left text-xs font-semibold transition-all cursor-pointer flex justify-between items-center ${
-                    seleccionado
-                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
-                      : 'border-slate-800 bg-slate-800/30 text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  <span>{eq.nombre}</span>
-                  {seleccionado && <span>✓</span>}
-                </button>
-              );
-            })}
-          </div>
 
           <p className="text-xs text-slate-400 font-medium">
             Equipos seleccionados: <strong className="text-white">{equiposSeleccionados.length}</strong>
@@ -438,6 +400,12 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
             </div>
           </div>
         </form>
+      )}
+
+      {error && (
+        <p role="alert" className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {error}
+        </p>
       )}
 
       <div className="flex justify-between items-center mt-8 pt-4 border-t border-slate-800">

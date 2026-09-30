@@ -1,64 +1,64 @@
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import EquipoWizard from "../components/EquipoWizard";
+
+const obtenerEquipos = async () => {
+  const response = await fetch("http://localhost:3000/api/equipos");
+  if (!response.ok) throw new Error("No se pudieron cargar los equipos.");
+
+  const data = await response.json();
+  if (!Array.isArray(data)) throw new Error("La respuesta de equipos no es válida.");
+  return data;
+};
 
 export default function Equipos() {
   const navigate = useNavigate();
 
   const [busqueda, setBusqueda] = useState("");
-  const [categoria, setCategoria] = useState("Todas");
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [equipos, setEquipos] = useState([]);
+  const [cargandoEquipos, setCargandoEquipos] = useState(true);
+  const [errorEquipos, setErrorEquipos] = useState("");
 
-  const equipos = [
-    {
-      id: 1,
-      nombre: "Los Tigres",
-      disciplina: "Fútbol",
-      modalidad: "Fútbol 11",
-      categoria: "A",
-      localidad: "Rosario",
-      capitan: "Juan Pérez",
-      jugadores: 8,
-    },
-    {
-      id: 2,
-      nombre: "Atlético Central",
-      disciplina: "Básquet",
-      modalidad: "Básquet",
-      categoria: "B",
-      localidad: "Rosario",
-      capitan: "Lucas Gómez",
-      jugadores: 11,
-    },
-    {
-      id: 3,
-      nombre: "Los Halcones",
-      disciplina: "Vóley",
-      modalidad: "Vóley",
-      categoria: "Sub 18",
-      localidad: "Funes",
-      capitan: "Martín López",
-      jugadores: 9,
-    },
-    {
-      id: 4,
-      nombre: "Deportivo Sur",
-      disciplina: "Fútbol",
-      modalidad: "Fútbol 5",
-      categoria: "Sub 13",
-      localidad: "Villa Gobernador Gálvez",
-      capitan: "Nicolás Rodríguez",
-      jugadores: 7,
-    },
-  ];
+  useEffect(() => {
+    let cancelado = false;
+
+    obtenerEquipos()
+      .then((data) => {
+        if (!cancelado) setEquipos(data);
+      })
+      .catch((error) => {
+        if (!cancelado) setErrorEquipos(error.message || "No se pudo conectar con el servidor.");
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoEquipos(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  const recargarEquipos = async () => {
+    setCargandoEquipos(true);
+    setErrorEquipos("");
+    try {
+      setEquipos(await obtenerEquipos());
+    } catch (error) {
+      setEquipos([]);
+      setErrorEquipos(error.message || "No se pudo conectar con el servidor.");
+    } finally {
+      setCargandoEquipos(false);
+    }
+  };
 
   const equiposFiltrados = equipos.filter((equipo) => {
-    const coincideBusqueda = equipo.nombre
+    const coincideBusqueda = (equipo.nombre || equipo.nombreEquipo || "")
       .toLowerCase()
       .includes(busqueda.toLowerCase());
 
-    const coincideCategoria =
-      categoria === "Todas" || equipo.categoria === categoria;
-
-    return coincideBusqueda && coincideCategoria;
+    return coincideBusqueda;
   });
 
   return (
@@ -67,7 +67,9 @@ export default function Equipos() {
       {/* ENCABEZADO */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <span className="text-sm text-lime-700 font-bold">Listado de equipos</span>
+          <span className="text-sm text-lime-700 font-bold">
+            Listado de equipos
+          </span>
 
           <h1 className="text-2xl font-bold">
             Equipos
@@ -79,14 +81,14 @@ export default function Equipos() {
         </div>
 
         <button
-          onClick={() => navigate("/crear-equipo")}
+          onClick={() => setIsWizardOpen(true)}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
         >
           + Crear equipo
         </button>
       </div>
 
-      {/* BUSCADOR Y FILTRO */}
+      {/* BUSCADOR */}
       <div className="flex flex-col md:flex-row gap-3 mb-3">
 
         <input
@@ -97,50 +99,18 @@ export default function Equipos() {
           className="border border-gray-300 rounded-lg px-4 py-2 w-full md:w-1/2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
-        <select
-          value={categoria}
-          onChange={(e) => setCategoria(e.target.value)}
-          className="border border-gray-300 rounded-lg px-4 py-2 md:w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="Todas">
-            Todas las categorías
-          </option>
-
-          <option value="Sub 13">
-            Sub 13
-          </option>
-
-          <option value="Sub 18">
-            Sub 18
-          </option>
-
-          <option value="E">
-            E
-          </option>
-
-          <option value="D">
-            D
-          </option>
-
-          <option value="C">
-            C
-          </option>
-
-          <option value="B">
-            B
-          </option>
-
-          <option value="A">
-            A
-          </option>
-        </select>
-
       </div>
 
       {/* CANTIDAD */}
       <p className="text-sm text-gray-500 mb-4">
-        {equiposFiltrados.length} equipos encontrados
+        {cargandoEquipos ? "Cargando equipos..." : `${equiposFiltrados.length} equipos encontrados`}
       </p>
+
+      {errorEquipos && (
+        <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errorEquipos}
+        </p>
+      )}
 
       {/* LISTA DE EQUIPOS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -161,16 +131,12 @@ export default function Equipos() {
 
               <div>
                 <h2 className="text-lg font-bold">
-                  {equipo.nombre}
+                  {equipo.nombre || equipo.nombreEquipo}
                 </h2>
 
                 <p className="text-sm text-blue-600 font-medium">
-                  {equipo.disciplina} · {equipo.modalidad}
+                  {equipo.deporte || "Deporte sin definir"} · {equipo.disciplina || "Disciplina sin definir"}
                 </p>
-
-                <span className="text-sm text-gray-500">
-                  Categoría {equipo.categoria}
-                </span>
               </div>
 
             </div>
@@ -190,7 +156,7 @@ export default function Equipos() {
 
               <p>
                 <strong>Jugadores:</strong>{" "}
-                {equipo.jugadores}
+                {equipo.cantidadJugadores ?? 0}
               </p>
 
             </div>
@@ -199,6 +165,7 @@ export default function Equipos() {
             <div className="flex gap-2">
 
               <button
+                onClick={() => navigate(`/equipos/${equipo.id}`)}
                 className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
               >
                 Ver equipo
@@ -225,7 +192,7 @@ export default function Equipos() {
       </div>
 
       {/* SIN RESULTADOS */}
-      {equiposFiltrados.length === 0 && (
+      {!cargandoEquipos && !errorEquipos && equiposFiltrados.length === 0 && (
         <div className="text-center py-12 text-gray-500">
 
           <p className="text-lg font-semibold">
@@ -236,6 +203,24 @@ export default function Equipos() {
             Probá con otro nombre o categoría.
           </p>
 
+        </div>
+      )}
+
+      {isWizardOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            onClick={() => setIsWizardOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-3xl">
+            <EquipoWizard
+              onVolver={() => setIsWizardOpen(false)}
+              onEquipoCreado={() => {
+                setIsWizardOpen(false);
+                recargarEquipos();
+              }}
+            />
+          </div>
         </div>
       )}
 
