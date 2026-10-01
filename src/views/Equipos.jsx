@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import EquipoWizard from "../components/EquipoWizard";
+import EditarEquipoModal from "../components/EditarEquipoModal";
 
 const obtenerEquipos = async () => {
   const response = await fetch("http://localhost:3000/api/equipos");
@@ -20,6 +21,10 @@ export default function Equipos() {
   const [equipos, setEquipos] = useState([]);
   const [cargandoEquipos, setCargandoEquipos] = useState(true);
   const [errorEquipos, setErrorEquipos] = useState("");
+  const [equipoAEditar, setEquipoAEditar] = useState(null);
+  const [equipoAEliminar, setEquipoAEliminar] = useState(null);
+  const [eliminandoEquipo, setEliminandoEquipo] = useState(false);
+  const [errorEliminacionEquipo, setErrorEliminacionEquipo] = useState("");
 
   useEffect(() => {
     let cancelado = false;
@@ -50,6 +55,26 @@ export default function Equipos() {
       setErrorEquipos(error.message || "No se pudo conectar con el servidor.");
     } finally {
       setCargandoEquipos(false);
+    }
+  };
+
+  const eliminarEquipo = async () => {
+    if (!equipoAEliminar || eliminandoEquipo) return;
+    setEliminandoEquipo(true);
+    setErrorEliminacionEquipo("");
+    setErrorEquipos("");
+    try {
+      const response = await fetch(`http://localhost:3000/api/equipos/${equipoAEliminar.id}`, {
+        method: "DELETE",
+      });
+      const resultado = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(resultado.error || "No se pudo eliminar el equipo.");
+      setEquipoAEliminar(null);
+      await recargarEquipos();
+    } catch (error) {
+      setErrorEliminacionEquipo(error.message || "No se pudo conectar con el servidor.");
+    } finally {
+      setEliminandoEquipo(false);
     }
   };
 
@@ -172,12 +197,17 @@ export default function Equipos() {
               </button>
 
               <button
+                onClick={() => setEquipoAEditar(equipo)}
                 className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
               >
                 Editar
               </button>
 
               <button
+            onClick={() => {
+              setErrorEliminacionEquipo("");
+              setEquipoAEliminar(equipo);
+            }}
                 className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition"
               >
                 Eliminar
@@ -221,6 +251,40 @@ export default function Equipos() {
               }}
             />
           </div>
+        </div>
+      )}
+
+      {equipoAEditar && (
+        <EditarEquipoModal
+          equipo={equipoAEditar}
+          onClose={() => setEquipoAEditar(null)}
+          onSaved={recargarEquipos}
+        />
+      )}
+
+      {equipoAEliminar && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Cancelar eliminación"
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm"
+            onClick={() => setEquipoAEliminar(null)}
+            disabled={eliminandoEquipo}
+          />
+          <section role="alertdialog" aria-modal="true" aria-labelledby="eliminar-equipo-titulo" className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="eliminar-equipo-titulo" className="text-lg font-bold text-slate-900">¿Eliminar este equipo?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Se eliminarán también los jugadores del plantel. Si el equipo ya está inscripto en un torneo, el sistema bloqueará la eliminación para proteger ese historial.
+            </p>
+            <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">{equipoAEliminar.nombre || equipoAEliminar.nombreEquipo}</p>
+            {errorEliminacionEquipo && <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{errorEliminacionEquipo}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setEquipoAEliminar(null)} disabled={eliminandoEquipo} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+              <button type="button" onClick={eliminarEquipo} disabled={eliminandoEquipo} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+                {eliminandoEquipo ? "Eliminando..." : "Eliminar equipo"}
+              </button>
+            </div>
+          </section>
         </div>
       )}
 

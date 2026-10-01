@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS jugador (
     nombre VARCHAR(80) NOT NULL,
     apellido VARCHAR(80) NOT NULL,
     dni VARCHAR(20) NULL,
+    esCapitan TINYINT(1) NOT NULL DEFAULT 0,
     fechaCreacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_jugador_equipo (idEquipo),
     INDEX idx_jugador_dni (dni),
@@ -50,5 +51,5 @@ CREATE TABLE IF NOT EXISTS torneo_equipo (
         FOREIGN KEY (idEquipo)
         REFERENCES equipo(idEquipo)
         ON UPDATE CASCADE
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

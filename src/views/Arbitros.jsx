@@ -5,14 +5,17 @@ export default function Arbitros() {
   const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div>
+      <span className="text-sm text-lime-700 font-bold">
+            Listado de Árbitros
+      </span>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">
+          <h1 className="text-2xl font-bold">
             Árbitros
           </h1>
 
-          <p className="text-slate-500 mt-1">
+          <p className="text-slate-500 text-sm font-semibold mt-1">
             Gestioná los árbitros registrados en Global League.
           </p>
         </div>

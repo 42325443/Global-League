@@ -12,7 +12,8 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
     idDeporte: "",
     idDisciplina: "",
     localidad: "",
-    capitan: "",
+    capitanNombre: "",
+    capitanApellido: "",
   });
 
   const [deportes, setDeportes] = useState([]);
@@ -154,6 +155,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
       nombre: nuevoJugador.nombre.trim(),
       apellido: nuevoJugador.apellido.trim(),
       dni: nuevoJugador.dni.trim(),
+      esCapitan: false,
     };
 
     setJugadores((prev) => [...prev, jugador]);
@@ -167,8 +169,42 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
 
   const eliminarJugador = (id) => {
     setJugadores((prev) =>
-      prev.filter((jugador) => jugador.id !== id)
+      prev.filter((jugador) => jugador.id !== id || jugador.esCapitan)
     );
+  };
+
+  const prepararPlantelConCapitan = () => {
+    const capitanNombre = formData.capitanNombre.trim();
+    const capitanApellido = formData.capitanApellido.trim();
+    const normalizar = (valor) => valor.trim().toLocaleLowerCase();
+
+    setJugadores((prev) => {
+      const jugadoresManuales = prev.filter((jugador) => !jugador.esCapitanAuto);
+      const indiceCapitan = jugadoresManuales.findIndex((jugador) => (
+        normalizar(jugador.nombre) === normalizar(capitanNombre)
+        && normalizar(jugador.apellido) === normalizar(capitanApellido)
+      ));
+
+      if (indiceCapitan >= 0) {
+        return jugadoresManuales.map((jugador, index) => ({
+          ...jugador,
+          esCapitan: index === indiceCapitan,
+          esCapitanAuto: false,
+        }));
+      }
+
+      return [
+        ...jugadoresManuales.map((jugador) => ({ ...jugador, esCapitan: false })),
+        {
+          id: Date.now(),
+          nombre: capitanNombre,
+          apellido: capitanApellido,
+          dni: "",
+          esCapitan: true,
+          esCapitanAuto: true,
+        },
+      ];
+    });
   };
 
   const handleFinalizar = async (e) => {
@@ -186,11 +222,15 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
           nombreEquipo: formData.nombreEquipo.trim(),
           idDisciplina: Number(formData.idDisciplina),
           localidad: formData.localidad.trim(),
-          capitan: formData.capitan.trim(),
-          jugadores: jugadores.map(({ nombre, apellido, dni }) => ({
+          capitan: {
+            nombre: formData.capitanNombre.trim(),
+            apellido: formData.capitanApellido.trim(),
+          },
+          jugadores: jugadores.map(({ nombre, apellido, dni, esCapitan }) => ({
             nombre,
             apellido,
             dni,
+            esCapitan,
           })),
         }),
       });
@@ -215,7 +255,8 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
   const puedeAvanzarPaso2 =
     formData.nombreEquipo.trim() &&
     formData.localidad.trim() &&
-    formData.capitan.trim();
+    formData.capitanNombre.trim() &&
+    formData.capitanApellido.trim();
 
   return (
     <div className="w-full max-w-3xl mx-auto bg-slate-900 text-slate-100 p-6 md:p-8 rounded-2xl shadow-2xl border border-slate-800">
@@ -402,23 +443,28 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
 
           </div>
 
-          {/* CAPITAN */}
-
           <div>
-
             <label className="block text-xs font-medium text-slate-400 mb-1">
-              Capitán *
+              Capitán * <span className="font-normal">(también se agregará al plantel)</span>
             </label>
-
-            <input
-              type="text"
-              name="capitan"
-              value={formData.capitan}
-              onChange={handleChange}
-              placeholder="Ej: Juan Pérez"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
-            />
-
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <input
+                type="text"
+                name="capitanNombre"
+                value={formData.capitanNombre}
+                onChange={handleChange}
+                placeholder="Nombre"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+              />
+              <input
+                type="text"
+                name="capitanApellido"
+                value={formData.capitanApellido}
+                onChange={handleChange}
+                placeholder="Apellido"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+              />
+            </div>
           </div>
 
         </div>
@@ -438,7 +484,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
             </h3>
 
             <p className="text-xs text-slate-400 mt-1">
-              Agregá los jugadores que forman parte del equipo.
+              Agregá el resto del plantel. El capitán ya está incluido.
             </p>
 
           </div>
@@ -536,6 +582,11 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
 
                       <p className="text-sm font-semibold text-slate-200">
                         {jugador.nombre} {jugador.apellido}
+                        {jugador.esCapitan && (
+                          <span className="ml-2 rounded-full bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-300">
+                            Capitán
+                          </span>
+                        )}
                       </p>
 
                       {jugador.dni && (
@@ -553,7 +604,9 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
                     onClick={() =>
                       eliminarJugador(jugador.id)
                     }
-                    className="text-xs text-red-400 hover:text-red-300 font-semibold cursor-pointer"
+                    disabled={jugador.esCapitan}
+                    title={jugador.esCapitan ? "El capitán debe formar parte del plantel" : undefined}
+                    className="text-xs text-red-400 hover:text-red-300 font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Eliminar
                   </button>
@@ -619,9 +672,10 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
               (paso === 1 && !puedeAvanzarPaso1) ||
               (paso === 2 && !puedeAvanzarPaso2)
             }
-            onClick={() =>
-              setPaso((p) => p + 1)
-            }
+            onClick={() => {
+              if (paso === 2) prepararPlantelConCapitan();
+              setPaso((p) => p + 1);
+            }}
             className="px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold text-xs hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             Siguiente
@@ -637,7 +691,8 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
               !formData.idDeporte ||
               !formData.idDisciplina ||
               !formData.localidad.trim() ||
-              !formData.capitan.trim()
+              !formData.capitanNombre.trim() ||
+              !formData.capitanApellido.trim()
             }
             className="px-5 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
