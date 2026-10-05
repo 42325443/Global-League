@@ -15,6 +15,10 @@ export default function Torneos() {
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [torneoSeleccionado, setTorneoSeleccionado] = useState(null);
   const [pestanaDetalle, setPestanaDetalle] = useState('principal');
+  const [partidos, setPartidos] = useState([]);
+  const [cargandoPartidos, setCargandoPartidos] = useState(false);
+  const [generandoFixture, setGenerandoFixture] = useState(false);
+  const [errorPartidos, setErrorPartidos] = useState('');
   const [isDetalleModalVisible, setIsDetalleModalVisible] = useState(false);
   const [torneoAEliminar, setTorneoAEliminar] = useState(null);
   const [eliminandoTorneo, setEliminandoTorneo] = useState(false);
@@ -38,12 +42,121 @@ export default function Torneos() {
   const abrirModalDetalle = (torneo) => {
     setTorneoSeleccionado(torneo);
     setPestanaDetalle('principal');
+    setPartidos([]);
+    setErrorPartidos('');
+    setCargandoPartidos(true);
+    fetch(`http://localhost:3000/api/torneos/${torneo.id}/partidos`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => []);
+        if (!res.ok) throw new Error(data.error || 'No se pudieron cargar los partidos.');
+        return data;
+      })
+      .then((data) => setPartidos(Array.isArray(data) ? data : []))
+      .catch((error) => setErrorPartidos(error.message || 'No se pudieron cargar los partidos.'))
+      .finally(() => setCargandoPartidos(false));
     requestAnimationFrame(() => setIsDetalleModalVisible(true));
   };
 
   const cerrarModalDetalle = () => {
     setIsDetalleModalVisible(false);
-    setTimeout(() => setTorneoSeleccionado(null), 200);
+    setTimeout(() => {
+      setTorneoSeleccionado(null);
+      setPartidos([]);
+    }, 200);
+  };
+
+  const partidosPorRonda = useMemo(() => {
+    const grupos = new Map();
+    partidos.forEach((partido) => {
+      const nombre = partido.nombreRonda || `Jornada ${partido.jornada}`;
+      if (!grupos.has(nombre)) grupos.set(nombre, []);
+      grupos.get(nombre).push(partido);
+    });
+    return [...grupos.entries()].map(([nombre, items]) => ({ nombre, partidos: items }));
+  }, [partidos]);
+
+  const nombreParticipante = (partido, lado) => {
+    const equipo = lado === 'local' ? partido.equipoLocal : partido.equipoVisitante;
+    if (equipo) return equipo;
+    if (partido.estado === 'Pase libre' && lado === 'visitante') return 'Pase libre';
+    const idOrigen = lado === 'local' ? partido.idPartidoOrigenLocal : partido.idPartidoOrigenVisitante;
+    if (!idOrigen) return 'Por definir';
+    const partidoOrigen = partidos.find((item) => Number(item.idPartido) === Number(idOrigen));
+    if (!partidoOrigen) return 'Ganador por definir';
+    const etapaOrigen = partidoOrigen.nombreRonda || `Jornada ${partidoOrigen.jornada}`;
+    return `Ganador de ${etapaOrigen} #${partidoOrigen.numeroPartido}`;
+  };
+
+  const esTorneoEliminatorio = (torneo) => (
+    String(torneo?.modalidad || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('elimin')
+  );
+
+  const generarFixtureExistente = async () => {
+    if (!torneoSeleccionado || generandoFixture) return;
+    setGenerandoFixture(true);
+    setErrorPartidos('');
+    try {
+      const res = await fetch(`http://localhost:3000/api/torneos/${torneoSeleccionado.id}/fixture`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudieron generar los partidos.');
+      const partidosRes = await fetch(`http://localhost:3000/api/torneos/${torneoSeleccionado.id}/partidos`);
+      const nuevosPartidos = await partidosRes.json().catch(() => []);
+      if (!partidosRes.ok) throw new Error(nuevosPartidos.error || 'Se generaron los partidos, pero no se pudieron cargar.');
+      setPartidos(Array.isArray(nuevosPartidos) ? nuevosPartidos : []);
+    } catch (error) {
+      setErrorPartidos(error.message || 'No se pudieron generar los partidos.');
+    } finally {
+      setGenerandoFixture(false);
+    }
+  };
+
+  const renderPartidosAgrupados = (comoBracket = false) => {
+    if (cargandoPartidos) return <p className="py-8 text-center text-sm text-slate-500">Cargando partidos…</p>;
+    if (errorPartidos) return <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{errorPartidos}</p>;
+    if (partidos.length === 0) {
+      return (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <p className="text-sm text-slate-500">Todavía no hay partidos para este torneo.</p>
+          <button
+            type="button"
+            onClick={generarFixtureExistente}
+            disabled={generandoFixture}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {generandoFixture ? 'Generando partidos…' : 'Generar partidos'}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className={comoBracket ? 'flex gap-4 overflow-x-auto pb-3' : 'grid grid-cols-1 gap-4 md:grid-cols-2'}>
+        {partidosPorRonda.map((grupo) => (
+          <section key={grupo.nombre} className={`rounded-xl border border-slate-200 bg-slate-50 p-3 ${comoBracket ? 'w-64 shrink-0' : ''}`}>
+            <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">{grupo.nombre}</h3>
+            <div className="space-y-2">
+              {grupo.partidos.map((partido) => (
+                <article key={partido.idPartido} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                  <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                    <span>Partido {partido.numeroPartido || partido.idPartido}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500">{partido.estado || 'Pendiente'}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0 truncate font-medium text-slate-800">{nombreParticipante(partido, 'local')}</span>
+                    <strong className="shrink-0 font-mono text-slate-900">{partido.golesLocal ?? '—'}</strong>
+                  </div>
+                  <div className="my-1 border-t border-slate-100" />
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0 truncate font-medium text-slate-800">{nombreParticipante(partido, 'visitante')}</span>
+                    <strong className="shrink-0 font-mono text-slate-900">{partido.golesVisitante ?? '—'}</strong>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
   };
 
   const abrirConfirmacionEliminacion = (torneo) => {
@@ -453,7 +566,17 @@ export default function Torneos() {
                       : 'text-slate-400'
                   }`}
                 >
-                  {torneoSeleccionado.modalidad === 'Eliminatoria' ? 'Cuadro / Brackets' : 'Tabla de Posiciones'}
+                  {esTorneoEliminatorio(torneoSeleccionado) ? 'Cuadro / Brackets' : 'Tabla de Posiciones'}
+                </button>
+                <button
+                  onClick={() => setPestanaDetalle('partidos')}
+                  className={`pb-3 cursor-pointer ${
+                    pestanaDetalle === 'partidos'
+                      ? 'text-slate-900 font-bold border-b-2 border-slate-900'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  Partidos
                 </button>
                 <button
                   onClick={() => setPestanaDetalle('estadisticas')}
@@ -471,25 +594,8 @@ export default function Torneos() {
               <div className="mt-4 max-h-[60vh] overflow-y-auto">
                 {pestanaDetalle === 'principal' && (
                   <div>
-                    {torneoSeleccionado.modalidad === 'Eliminación Directa' || torneoSeleccionado.modalidad === 'Eliminatoria' ? (
-                      /* BRACKETS */
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {torneoSeleccionado.bracket && torneoSeleccionado.bracket.length > 0 ? (
-                          torneoSeleccionado.bracket.map((b, idx) => (
-                            <div key={idx} className="p-3.5 rounded-lg border border-slate-200 bg-slate-50 flex justify-between items-center text-sm">
-                              <div>
-                                <span className="text-xs font-bold text-slate-400 uppercase">{b.ronda}</span>
-                                <p className="font-medium text-slate-800">{b.partido}</p>
-                              </div>
-                              <span className="font-mono text-xs font-bold px-2 py-1 bg-white border border-slate-200 rounded">
-                                {b.resultado}
-                              </span>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-slate-400 italic">No hay cuadro generado aún.</p>
-                        )}
-                      </div>
+                    {esTorneoEliminatorio(torneoSeleccionado) ? (
+                      renderPartidosAgrupados(true)
                     ) : (
                       /* TABLA DE POSICIONES */
                       <div className="overflow-x-auto">
@@ -531,6 +637,8 @@ export default function Torneos() {
                     )}
                   </div>
                 )}
+
+                {pestanaDetalle === 'partidos' && renderPartidosAgrupados(esTorneoEliminatorio(torneoSeleccionado))}
 
                 {pestanaDetalle === 'estadisticas' && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

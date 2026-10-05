@@ -11,6 +11,7 @@ USE global_league;
 -- 2) Eliminamos tablas si existen (en orden inverso a sus dependencias), para evitar errores al correr multiples veces el script
 -- Eliminar este bloque cuando el proyecto este en producción y se quiera preservar la información. Borra todas las tablas al ser corrido el script, generando un reinicio, por lo que es necesario eliminarlo o comentarlo al momento de desplegar el proyecto o conectar la API.
 DROP TABLE IF EXISTS torneo_equipo;
+DROP TABLE IF EXISTS partido;
 DROP TABLE IF EXISTS jugador;
 DROP TABLE IF EXISTS equipo;
 DROP TABLE IF EXISTS torneo;
@@ -117,6 +118,41 @@ CREATE TABLE torneo_equipo (
         ON DELETE CASCADE,
     CONSTRAINT fk_torneo_equipo_equipo
         FOREIGN KEY (idEquipo)
+        REFERENCES equipo(idEquipo)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 10) Partidos del fixture de cada torneo. En eliminatoria se guardan también
+-- los cruces futuros, con equipos pendientes hasta que avancen sus predecesores.
+CREATE TABLE partido (
+    idPartido INT AUTO_INCREMENT PRIMARY KEY,
+    idTorneo INT NOT NULL,
+    idEquipoLocal INT NULL,
+    idEquipoVisitante INT NULL,
+    golesLocal INT NULL,
+    golesVisitante INT NULL,
+    jornada INT NOT NULL,
+    tipoEtapa VARCHAR(30) NOT NULL DEFAULT 'Liga',
+    nombreRonda VARCHAR(60) NULL,
+    numeroPartido INT NOT NULL,
+    idPartidoOrigenLocal INT NULL,
+    idPartidoOrigenVisitante INT NULL,
+    estado VARCHAR(50) NOT NULL DEFAULT 'Pendiente',
+    INDEX idx_partido_torneo_jornada (idTorneo, jornada),
+    UNIQUE KEY uq_partido_torneo_etapa_orden (idTorneo, tipoEtapa, jornada, numeroPartido),
+    CONSTRAINT fk_partido_torneo
+        FOREIGN KEY (idTorneo)
+        REFERENCES torneo(idTorneo)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+    CONSTRAINT fk_partido_equipo_local
+        FOREIGN KEY (idEquipoLocal)
+        REFERENCES equipo(idEquipo)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_partido_equipo_visitante
+        FOREIGN KEY (idEquipoVisitante)
         REFERENCES equipo(idEquipo)
         ON UPDATE CASCADE
         ON DELETE RESTRICT

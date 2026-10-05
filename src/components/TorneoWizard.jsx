@@ -30,9 +30,12 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
     cantidadEquiposMax: 12
   });
 
-  const equiposDelDeporte = equiposDisponibles.filter(
-    (equipo) => String(equipo.idDeporte) === String(formData.idDeporte)
+  const equiposDeLaDisciplina = equiposDisponibles.filter(
+    (equipo) => String(equipo.idDisciplina) === String(formData.idDisciplina)
   );
+  const limiteSeleccion = formData.cantidadEquiposMax === 'Sin limite'
+    ? Number.POSITIVE_INFINITY
+    : Number(formData.cantidadEquiposMax);
 
   useEffect(() => {
     fetch('http://localhost:3000/api/catalogos/deportes')
@@ -122,30 +125,50 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
   };
 
   const toggleSeleccionarEquipo = (equipo) => {
-    setEquiposSeleccionados((seleccionados) => (
-      seleccionados.some((e) => e.id === equipo.id)
-        ? seleccionados.filter((e) => e.id !== equipo.id)
-        : [...seleccionados, equipo]
-    ));
+    setEquiposSeleccionados((seleccionados) => {
+      if (seleccionados.some((e) => Number(e.id) === Number(equipo.id))) {
+        return seleccionados.filter((e) => Number(e.id) !== Number(equipo.id));
+      }
+      if (seleccionados.length >= limiteSeleccion) return seleccionados;
+      return [...seleccionados, equipo];
+    });
   };
 
   const handleSeleccionDeporte = (deporte) => {
-    setFormData((prev) => ({ ...prev, idDeporte: deporte.id_deporte, idDisciplina: '' }));
+    setFormData((prev) => ({ ...prev, idDeporte: deporte.idDeporte || deporte.id_deporte, idDisciplina: '' }));
+    setEquiposSeleccionados([]);
+  };
+
+  const handleSeleccionDisciplina = (disciplina) => {
+    const idDisciplina = disciplina.idDisciplina || disciplina.id_disciplina;
+    setFormData((prev) => ({ ...prev, idDisciplina }));
     setEquiposSeleccionados((seleccionados) => (
-      seleccionados.filter((equipo) => String(equipo.idDeporte) === String(deporte.id_deporte))
+      seleccionados.filter((equipo) => String(equipo.idDisciplina) === String(idDisciplina))
     ));
   };
 
   const handleFinalizar = async (e) => {
     e.preventDefault();
+    if (equiposSeleccionados.length < 2) {
+      setError('Seleccioná al menos 2 equipos para crear los partidos del torneo.');
+      return;
+    }
+    if (equiposSeleccionados.length > limiteSeleccion) {
+      setError(`El límite del torneo es de ${limiteSeleccion} equipos.`);
+      return;
+    }
+    if (formData.fechaFin < formData.fechaInicio) {
+      setError('La fecha de fin debe ser igual o posterior a la fecha de inicio.');
+      return;
+    }
     setCargando(true);
     setError(null);
 
     const payload = {
       nombreTorneo: formData.nombreTorneo,
       descripcionTorneo: formData.descripcionTorneo,
-      idDisciplina: Number(formData.idDisciplina) || 1,
-      idFormato: Number(formData.idFormato) || 1,
+      idDisciplina: Number(formData.idDisciplina),
+      idFormato: Number(formData.idFormato),
       fechaInicio: formData.fechaInicio,
       fechaFin: formData.fechaFin,
       ubicacion: formData.ubicacion,
@@ -205,10 +228,11 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
             <h3 className="text-lg font-semibold text-slate-200 mb-3">1. Selecciona el Deporte</h3>
             <div className="grid grid-cols-3 gap-3">
               {deportes.map((dep) => {
-                const selected = String(formData.idDeporte) === String(dep.id_deporte);
+                const idDeporte = dep.idDeporte || dep.id_deporte;
+                const selected = String(formData.idDeporte) === String(idDeporte);
                 return (
                   <button
-                    key={dep.id_deporte}
+                    key={idDeporte}
                     type="button"
                     onClick={() => handleSeleccionDeporte(dep)}
                     className={`p-4 rounded-xl border text-center transition-all cursor-pointer ${
@@ -229,12 +253,13 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
               <h3 className="text-lg font-semibold text-slate-200 mb-3">2. Selecciona la Disciplina</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {disciplinas.map((disc) => {
-                  const selected = String(formData.idDisciplina) === String(disc.id_disciplina);
+                  const idDisciplina = disc.idDisciplina || disc.id_disciplina;
+                  const selected = String(formData.idDisciplina) === String(idDisciplina);
                   return (
                     <button
-                      key={disc.id_disciplina}
+                      key={idDisciplina}
                       type="button"
-                      onClick={() => setFormData((p) => ({ ...p, idDisciplina: disc.id_disciplina }))}
+                      onClick={() => handleSeleccionDisciplina(disc)}
                       className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                         selected
                           ? 'border-blue-500 bg-blue-500/10 text-white font-bold'
@@ -294,23 +319,31 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
             <p className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300">
               Todavía no hay equipos guardados. Creá un equipo desde la pestaña Equipos y volvé a este paso.
             </p>
-          ) : equiposDelDeporte.length === 0 ? (
+          ) : !formData.idDisciplina ? (
             <p className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300">
-              No hay equipos guardados para el deporte seleccionado.
+              Seleccioná una disciplina en el primer paso para ver los equipos compatibles.
+            </p>
+          ) : equiposDeLaDisciplina.length === 0 ? (
+            <p className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300">
+              No hay equipos guardados para la disciplina seleccionada.
             </p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-56 overflow-y-auto pr-1">
-              {equiposDelDeporte.map((eq) => {
-                const seleccionado = equiposSeleccionados.some((e) => e.id === eq.id);
+              {equiposDeLaDisciplina.map((eq) => {
+                const seleccionado = equiposSeleccionados.some((e) => Number(e.id) === Number(eq.id));
+                const limiteAlcanzado = equiposSeleccionados.length >= limiteSeleccion && !seleccionado;
                 return (
                   <button
                     key={eq.id}
                     type="button"
                     onClick={() => toggleSeleccionarEquipo(eq)}
+                    disabled={limiteAlcanzado}
                     className={`p-3 rounded-lg border text-left text-xs font-semibold transition-all cursor-pointer flex justify-between items-center ${
                       seleccionado
                         ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
-                        : 'border-slate-800 bg-slate-800/30 text-slate-400 hover:border-slate-700'
+                        : limiteAlcanzado
+                          ? 'border-slate-800 bg-slate-800/20 text-slate-600 cursor-not-allowed'
+                          : 'border-slate-800 bg-slate-800/30 text-slate-400 hover:border-slate-700'
                     }`}
                   >
                     <span>{eq.nombre || eq.nombreEquipo}</span>
@@ -324,6 +357,12 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
           <p className="text-xs text-slate-400 font-medium">
             Equipos seleccionados: <strong className="text-white">{equiposSeleccionados.length}</strong>
           </p>
+          {equiposSeleccionados.length < 2 && (
+            <p className="text-xs text-amber-300">Elegí al menos 2 equipos para generar el fixture automáticamente.</p>
+          )}
+          {Number.isFinite(limiteSeleccion) && (
+            <p className="text-xs text-slate-500">Límite actual: {limiteSeleccion} equipos.</p>
+          )}
         </div>
       )}
 
@@ -362,6 +401,7 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
                 type="date"
                 name="fechaFin"
                 required
+                min={formData.fechaInicio || undefined}
                 value={formData.fechaFin}
                 onChange={handleChangeInput}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
@@ -427,7 +467,8 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
             onClick={() => setPaso((p) => p + 1)}
             disabled={
               (paso === 1 && (!formData.idDeporte || !formData.idDisciplina)) ||
-              (paso === 2 && !formData.idFormato)
+              (paso === 2 && !formData.idFormato) ||
+              (paso === 3 && (equiposSeleccionados.length < 2 || equiposSeleccionados.length > limiteSeleccion))
             }
             className="px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold text-xs hover:bg-blue-500 disabled:opacity-50 cursor-pointer"
           >
