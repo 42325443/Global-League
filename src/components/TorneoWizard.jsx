@@ -1,5 +1,6 @@
 // src/components/TorneoWizard.jsx
 import { useState, useEffect } from 'react';
+import { apiFetch } from '../lib/api';
 
 export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
   const [paso, setPaso] = useState(1);
@@ -38,7 +39,7 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
     : Number(formData.cantidadEquiposMax);
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/catalogos/deportes')
+    apiFetch('/catalogos/deportes')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (data && data.length > 0) setDeportes(data);
@@ -57,7 +58,7 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
     if (formData.idDeporte) {
       const idDep = Number(formData.idDeporte);
 
-      fetch(`http://localhost:3000/api/catalogos/disciplinas?idDeporte=${idDep}`)
+      apiFetch(`/catalogos/disciplinas?idDeporte=${idDep}`)
         .then((res) => (res.ok ? res.json() : []))
         .then((data) => {
           const filtradas = data.filter(
@@ -94,7 +95,7 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
   }, [formData.idDeporte]);
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/catalogos/formatos')
+    apiFetch('/catalogos/formatos')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setFormatos(data))
       .catch(() => {
@@ -106,7 +107,7 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
   }, []);
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/equipos')
+    apiFetch('/equipos')
       .then((res) => {
         if (!res.ok) throw new Error('No se pudieron cargar los equipos.');
         return res.json();
@@ -177,7 +178,7 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
     };
 
     try {
-      const response = await fetch('http://localhost:3000/api/torneos', {
+      const response = await apiFetch('/torneos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

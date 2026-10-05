@@ -1,6 +1,7 @@
 // src/views/Torneos.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import { TorneoWizard } from '../components/TorneoWizard';
+import { apiFetch } from '../lib/api';
 
 // Array inicial vacío listo para recibir torneos reales
 const MOCK_TORNEOS = [];
@@ -26,7 +27,7 @@ export default function Torneos() {
 
   // 1. Función extraída para poder recargar los torneos cuando queramos
   const cargarTorneos = () => {
-    fetch('http://localhost:3000/api/torneos')
+    apiFetch('/torneos')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (Array.isArray(data)) setTorneos(data);
@@ -45,7 +46,7 @@ export default function Torneos() {
     setPartidos([]);
     setErrorPartidos('');
     setCargandoPartidos(true);
-    fetch(`http://localhost:3000/api/torneos/${torneo.id}/partidos`)
+    apiFetch(`/torneos/${torneo.id}/partidos`)
       .then(async (res) => {
         const data = await res.json().catch(() => []);
         if (!res.ok) throw new Error(data.error || 'No se pudieron cargar los partidos.');
@@ -96,10 +97,10 @@ export default function Torneos() {
     setGenerandoFixture(true);
     setErrorPartidos('');
     try {
-      const res = await fetch(`http://localhost:3000/api/torneos/${torneoSeleccionado.id}/fixture`, { method: 'POST' });
+      const res = await apiFetch(`/torneos/${torneoSeleccionado.id}/fixture`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'No se pudieron generar los partidos.');
-      const partidosRes = await fetch(`http://localhost:3000/api/torneos/${torneoSeleccionado.id}/partidos`);
+      const partidosRes = await apiFetch(`/torneos/${torneoSeleccionado.id}/partidos`);
       const nuevosPartidos = await partidosRes.json().catch(() => []);
       if (!partidosRes.ok) throw new Error(nuevosPartidos.error || 'Se generaron los partidos, pero no se pudieron cargar.');
       setPartidos(Array.isArray(nuevosPartidos) ? nuevosPartidos : []);
@@ -164,11 +165,11 @@ export default function Torneos() {
     setTorneoAEliminar(torneo);
   };
 
-  const cerrarConfirmacionEliminacion = () => {
+  const cerrarConfirmacionEliminacion = useCallback(() => {
     if (eliminandoTorneo) return;
     setTorneoAEliminar(null);
     setErrorEliminacion('');
-  };
+  }, [eliminandoTorneo]);
 
   const formatearFecha = (valor) => {
     if (!valor) return 'Sin definir';
@@ -188,7 +189,7 @@ export default function Torneos() {
     setErrorEliminacion('');
 
     try {
-      const res = await fetch(`http://localhost:3000/api/torneos/${torneoAEliminar.id}`, {
+      const res = await apiFetch(`/torneos/${torneoAEliminar.id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -215,7 +216,7 @@ export default function Torneos() {
 
     window.addEventListener('keydown', manejarEscape);
     return () => window.removeEventListener('keydown', manejarEscape);
-  }, [torneoAEliminar, eliminandoTorneo]);
+  }, [torneoAEliminar, eliminandoTorneo, cerrarConfirmacionEliminacion]);
 
   const torneosFiltrados = useMemo(() => {
     return torneos.filter((torneo) => {

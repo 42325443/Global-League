@@ -1,5 +1,5 @@
 
-export default function Estadisticas({torneosCreados, torneosTerminados, torneosEnCurso}) {
+export default function Estadisticas() {
   return (
 
     <div>

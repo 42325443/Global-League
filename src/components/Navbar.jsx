@@ -1,6 +1,6 @@
 // Ruta del componente: src/components/Navbar.jsx
 import { useState, useRef, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { ICONS } from '../icons';
 
 // Arreglo para cargar vistas al navbar
@@ -18,11 +18,29 @@ function NavIcon({ name, className = 'w-5 h-5' }) {
   return Icon ? <Icon className={className} aria-hidden="true" /> : null;
 }
 
-export function Navbar({ role = 'Administrador' }) {
+export function Navbar({ role = 'Organizador', onLogout }) {
   const [open, setOpen] = useState(false);
+  const [confirmarCierreSesion, setConfirmarCierreSesion] = useState(false);
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const panelRef = useRef(null);
   const openButtonRef = useRef(null);
-  const location = useLocation(); // 🔑 Saber ruta actual
+  const cancelarCierreRef = useRef(null);
+
+  const solicitarCierreSesion = () => {
+    setOpen(false);
+    setConfirmarCierreSesion(true);
+  };
+
+  const confirmarCierre = async () => {
+    if (cerrandoSesion) return;
+    setCerrandoSesion(true);
+    try {
+      await onLogout?.();
+    } finally {
+      setConfirmarCierreSesion(false);
+      setCerrandoSesion(false);
+    }
+  };
 
   useEffect(() => {
     function onKey(e) {
@@ -36,6 +54,17 @@ export function Navbar({ role = 'Administrador' }) {
     }
     return () => document.removeEventListener('keydown', onKey);
   }, [open]);
+
+  useEffect(() => {
+    if (!confirmarCierreSesion) return undefined;
+
+    cancelarCierreRef.current?.focus();
+    const onKey = (event) => {
+      if (event.key === 'Escape' && !cerrandoSesion) setConfirmarCierreSesion(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [confirmarCierreSesion, cerrandoSesion]);
 
   const linkClasses = (isActive) =>
     `flex items-center gap-3 px-3 py-2 rounded-md transition-colors select-none
@@ -104,7 +133,11 @@ export function Navbar({ role = 'Administrador' }) {
 
         </div>
 
-        <button className="mt-4 w-full text-red-600 border border-red-200 hover:bg-red-500 hover:text-white rounded-md py-2 font-semibold transition-colors">
+        <button
+          type="button"
+          onClick={solicitarCierreSesion}
+          className="mt-4 w-full rounded-md border border-red-200 py-2 font-semibold text-red-600 transition-colors hover:bg-red-500 hover:text-white"
+        >
           Cerrar sesión
         </button>
 
@@ -189,9 +222,64 @@ export function Navbar({ role = 'Administrador' }) {
 
           </nav>
 
+          <div className="absolute bottom-4 left-0 w-full px-4">
+            <button
+              type="button"
+              onClick={solicitarCierreSesion}
+              className="w-full rounded-md border border-red-200 py-2 font-semibold text-red-600 transition-colors hover:bg-red-500 hover:text-white"
+            >
+              Cerrar sesión
+            </button>
+          </div>
+
         </div>
 
       </div>
+
+      {confirmarCierreSesion && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Cancelar cierre de sesión"
+            className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
+            onClick={() => !cerrandoSesion && setConfirmarCierreSesion(false)}
+            disabled={cerrandoSesion}
+          />
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirmar-cierre-titulo"
+            aria-describedby="confirmar-cierre-descripcion"
+            className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+          >
+            <h2 id="confirmar-cierre-titulo" className="text-lg font-bold text-slate-900">
+              ¿Querés cerrar sesión?
+            </h2>
+            <p id="confirmar-cierre-descripcion" className="mt-2 text-sm text-slate-600">
+              Vas a salir de tu cuenta y volver a la pantalla de inicio de sesión.
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                ref={cancelarCierreRef}
+                type="button"
+                onClick={() => setConfirmarCierreSesion(false)}
+                disabled={cerrandoSesion}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Seguir conectado
+              </button>
+              <button
+                type="button"
+                onClick={confirmarCierre}
+                disabled={cerrandoSesion}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {cerrandoSesion ? 'Cerrando sesión…' : 'Cerrar sesión'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
     </>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { apiFetch } from "../lib/api";
 
 export default function EquipoDetalle() {
   const { id } = useParams();
@@ -14,7 +15,7 @@ export default function EquipoDetalle() {
   const jugadorCapitan = equipo?.jugadores?.find((jugador) => jugador.esCapitan);
 
   const recargarEquipo = async () => {
-    const response = await fetch(`http://localhost:3000/api/equipos/${id}`);
+    const response = await apiFetch(`/equipos/${id}`);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || "No se pudo cargar el equipo.");
     setEquipo(data);
@@ -23,7 +24,7 @@ export default function EquipoDetalle() {
   useEffect(() => {
     let cancelado = false;
 
-    fetch(`http://localhost:3000/api/equipos/${id}`)
+    apiFetch(`/equipos/${id}`)
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || "No se pudo cargar el equipo.");
@@ -52,7 +53,7 @@ export default function EquipoDetalle() {
     setErrorPlantel("");
     setMensajePlantel("");
     try {
-      const response = await fetch(`http://localhost:3000/api/equipos/${id}/jugadores`, {
+      const response = await apiFetch(`/equipos/${id}/jugadores`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(nuevoJugador),
@@ -77,7 +78,7 @@ export default function EquipoDetalle() {
     setErrorPlantel("");
     setMensajePlantel("");
     try {
-      const response = await fetch(`http://localhost:3000/api/equipos/${id}/capitan`, {
+      const response = await apiFetch(`/equipos/${id}/capitan`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idJugador }),

@@ -30,8 +30,9 @@ export const getEquipos = async (req, res) => {
       FROM equipo e
       JOIN disciplina d ON d.idDisciplina = e.idDisciplina
       JOIN deporte dep ON dep.idDeporte = d.idDeporte
+      WHERE e.idUsuario = ?
       ORDER BY e.idEquipo DESC
-    `);
+    `, [req.user.idUsuario]);
 
     res.json(rows.map(normalizarEquipo));
   } catch (error) {
@@ -61,8 +62,8 @@ export const getEquipoById = async (req, res) => {
       FROM equipo e
       JOIN disciplina d ON d.idDisciplina = e.idDisciplina
       JOIN deporte dep ON dep.idDeporte = d.idDeporte
-      WHERE e.idEquipo = ?
-    `, [idEquipo]);
+      WHERE e.idEquipo = ? AND e.idUsuario = ?
+    `, [idEquipo, req.user.idUsuario]);
 
     if (rows.length === 0) {
       return res.status(404).json({ error: 'No se encontró el equipo.' });
@@ -189,9 +190,9 @@ export const createEquipo = async (req, res) => {
     await connection.beginTransaction();
 
     const [equipoResult] = await connection.query(`
-      INSERT INTO equipo (nombreEquipo, idDisciplina, localidad, capitan)
-      VALUES (?, ?, ?, ?)
-    `, [datosEquipo.nombreEquipo, disciplinaId, datosEquipo.localidad, datosEquipo.capitan]);
+      INSERT INTO equipo (idUsuario, nombreEquipo, idDisciplina, localidad, capitan)
+      VALUES (?, ?, ?, ?, ?)
+    `, [req.user.idUsuario, datosEquipo.nombreEquipo, disciplinaId, datosEquipo.localidad, datosEquipo.capitan]);
 
     const nuevoIdEquipo = equipoResult.insertId;
 
@@ -221,6 +222,9 @@ export const createEquipo = async (req, res) => {
 
     if (error.code === 'ER_NO_REFERENCED_ROW_2') {
       return res.status(400).json({ error: 'La disciplina seleccionada no existe.' });
+    }
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'El DNI ingresado ya está registrado en otro equipo.' });
     }
 
     res.status(500).json({ error: 'No se pudo guardar el equipo y sus jugadores.' });
@@ -254,7 +258,10 @@ export const updateEquipo = async (req, res) => {
   }
 
   try {
-    const [equipos] = await pool.query('SELECT idEquipo, idDisciplina FROM equipo WHERE idEquipo = ?', [idEquipo]);
+    const [equipos] = await pool.query(
+      'SELECT idEquipo, idDisciplina FROM equipo WHERE idEquipo = ? AND idUsuario = ?',
+      [idEquipo, req.user.idUsuario]
+    );
     if (equipos.length === 0) return res.status(404).json({ error: 'No se encontró el equipo.' });
 
     if (Number(equipos[0].idDisciplina) !== disciplinaId) {
@@ -270,8 +277,8 @@ export const updateEquipo = async (req, res) => {
     await pool.query(`
       UPDATE equipo
       SET nombreEquipo = ?, idDisciplina = ?, localidad = ?
-      WHERE idEquipo = ?
-    `, [nombre, disciplinaId, localidadNormalizada, idEquipo]);
+      WHERE idEquipo = ? AND idUsuario = ?
+    `, [nombre, disciplinaId, localidadNormalizada, idEquipo, req.user.idUsuario]);
 
     res.json({ message: 'Equipo actualizado correctamente.' });
   } catch (error) {
@@ -288,7 +295,10 @@ export const deleteEquipo = async (req, res) => {
   if (!idEquipo) return res.status(400).json({ error: 'El identificador del equipo no es válido.' });
 
   try {
-    const [equipos] = await pool.query('SELECT idEquipo FROM equipo WHERE idEquipo = ?', [idEquipo]);
+    const [equipos] = await pool.query(
+      'SELECT idEquipo FROM equipo WHERE idEquipo = ? AND idUsuario = ?',
+      [idEquipo, req.user.idUsuario]
+    );
     if (equipos.length === 0) return res.status(404).json({ error: 'No se encontró el equipo.' });
 
     const [inscripciones] = await pool.query(
@@ -299,7 +309,7 @@ export const deleteEquipo = async (req, res) => {
       return res.status(409).json({ error: 'Este equipo está inscripto en uno o más torneos y no se puede eliminar.' });
     }
 
-    await pool.query('DELETE FROM equipo WHERE idEquipo = ?', [idEquipo]);
+    await pool.query('DELETE FROM equipo WHERE idEquipo = ? AND idUsuario = ?', [idEquipo, req.user.idUsuario]);
     res.json({ message: 'Equipo eliminado correctamente.' });
   } catch (error) {
     if (error.code === 'ER_ROW_IS_REFERENCED_2') {
@@ -326,6 +336,12 @@ export const addJugador = async (req, res) => {
   }
 
   try {
+    const [[equipo]] = await pool.query(
+      'SELECT idEquipo FROM equipo WHERE idEquipo = ? AND idUsuario = ?',
+      [idEquipo, req.user.idUsuario]
+    );
+    if (!equipo) return res.status(404).json({ error: 'No se encontró el equipo.' });
+
     const [result] = await pool.query(`
       INSERT INTO jugador (idEquipo, nombre, apellido, dni)
       VALUES (?, ?, ?, ?)
@@ -341,6 +357,9 @@ export const addJugador = async (req, res) => {
   } catch (error) {
     if (error.code === 'ER_NO_REFERENCED_ROW_2') {
       return res.status(404).json({ error: 'No se encontró el equipo.' });
+    }
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Ese DNI ya está registrado en otro equipo.' });
     }
     console.error('Error al agregar jugador:', error);
     res.status(500).json({ error: 'No se pudo agregar el jugador.' });
@@ -360,11 +379,12 @@ export const setCapitan = async (req, res) => {
     await connection.beginTransaction();
 
     const [jugadores] = await connection.query(`
-      SELECT idJugador, nombre, apellido
-      FROM jugador
-      WHERE idJugador = ? AND idEquipo = ?
+      SELECT j.idJugador, j.nombre, j.apellido
+      FROM jugador j
+      JOIN equipo e ON e.idEquipo = j.idEquipo
+      WHERE j.idJugador = ? AND j.idEquipo = ? AND e.idUsuario = ?
       FOR UPDATE
-    `, [idJugador, idEquipo]);
+    `, [idJugador, idEquipo, req.user.idUsuario]);
     if (jugadores.length === 0) {
       await connection.rollback();
       return res.status(404).json({ error: 'El jugador seleccionado no pertenece a este equipo.' });

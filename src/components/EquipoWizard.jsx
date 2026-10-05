@@ -1,6 +1,7 @@
 
 // src/components/EquipoWizard.jsx
 import { useEffect, useState } from "react";
+import { apiFetch } from "../lib/api";
 
 export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
   const [paso, setPaso] = useState(1);
@@ -34,7 +35,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
   useEffect(() => {
     let cancelado = false;
 
-    fetch("http://localhost:3000/api/catalogos/deportes")
+    apiFetch("/catalogos/deportes")
       .then((response) => {
         if (!response.ok) throw new Error("No se pudieron cargar los deportes");
         return response.json();
@@ -73,8 +74,8 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
 
     const cargarDisciplinas = async () => {
       try {
-        const response = await fetch(
-          `http://localhost:3000/api/catalogos/disciplinas?idDeporte=${encodeURIComponent(formData.idDeporte)}`
+        const response = await apiFetch(
+          `/catalogos/disciplinas?idDeporte=${encodeURIComponent(formData.idDeporte)}`
         );
         if (!response.ok) throw new Error("No se pudieron cargar las disciplinas");
 
@@ -215,7 +216,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
     setErrorGuardado("");
 
     try {
-      const response = await fetch("http://localhost:3000/api/equipos", {
+      const response = await apiFetch("/equipos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

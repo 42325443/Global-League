@@ -4,20 +4,28 @@ import dotenv from 'dotenv';
 import torneoRoutes from './routes/torneoRoutes.js';
 import catalogosRoutes from './routes/catalogosRoutes.js';
 import equipoRoutes from './routes/equipoRoutes.js';
+import authRoutes from './routes/authRoutes.js';
+import { requireAuth } from './middleware/requireAuth.js';
+import { assertAuthConfiguration } from './services/authService.js';
 
 dotenv.config();
+assertAuthConfiguration();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
+  credentials: true,
+}));
 app.use(express.json());
 
 // Rutas
-app.use('/api', torneoRoutes);
-app.use('/api/catalogos', catalogosRoutes); // <-- Registro de ruta Catalogos
-app.use('/api', equipoRoutes); // <-- Registro de ruta Equipos
+app.use('/api/auth', authRoutes);
+app.use('/api/catalogos', catalogosRoutes);
+app.use('/api', requireAuth, torneoRoutes);
+app.use('/api', requireAuth, equipoRoutes);
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en el puerto ${PORT}`);

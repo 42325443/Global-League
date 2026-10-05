@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import EquipoWizard from "../components/EquipoWizard";
 import EditarEquipoModal from "../components/EditarEquipoModal";
+import { apiFetch } from "../lib/api";
 
 const obtenerEquipos = async () => {
-  const response = await fetch("http://localhost:3000/api/equipos");
+  const response = await apiFetch("/equipos");
   if (!response.ok) throw new Error("No se pudieron cargar los equipos.");
 
   const data = await response.json();
@@ -64,7 +65,7 @@ export default function Equipos() {
     setErrorEliminacionEquipo("");
     setErrorEquipos("");
     try {
-      const response = await fetch(`http://localhost:3000/api/equipos/${equipoAEliminar.id}`, {
+      const response = await apiFetch(`/equipos/${equipoAEliminar.id}`, {
         method: "DELETE",
       });
       const resultado = await response.json().catch(() => ({}));

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiFetch } from "../lib/api";
 
 export default function EditarEquipoModal({ equipo, onClose, onSaved }) {
   const [formulario, setFormulario] = useState({
@@ -14,7 +15,7 @@ export default function EditarEquipoModal({ equipo, onClose, onSaved }) {
   useEffect(() => {
     let cancelado = false;
 
-    fetch("http://localhost:3000/api/catalogos/disciplinas")
+    apiFetch("/catalogos/disciplinas")
       .then(async (response) => {
         const data = await response.json().catch(() => []);
         if (!response.ok) throw new Error(data.error || "No se pudieron cargar las disciplinas.");
@@ -47,7 +48,7 @@ export default function EditarEquipoModal({ equipo, onClose, onSaved }) {
     setGuardando(true);
     setError("");
     try {
-      const response = await fetch(`http://localhost:3000/api/equipos/${equipo.id}`, {
+      const response = await apiFetch(`/equipos/${equipo.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

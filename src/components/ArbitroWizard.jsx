@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 
 export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
   const [paso, setPaso] = useState(1);

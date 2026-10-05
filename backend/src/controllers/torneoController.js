@@ -14,11 +14,11 @@ const normalizarIdsEquipos = (equiposIds) => {
   return ids;
 };
 
-const validarEquiposDeDisciplina = async (connection, idsEquipos, idDisciplina) => {
+const validarEquiposDeDisciplina = async (connection, idsEquipos, idDisciplina, idUsuario) => {
   const placeholders = idsEquipos.map(() => '?').join(', ');
   const [equipos] = await connection.query(
-    `SELECT idEquipo FROM equipo WHERE idDisciplina = ? AND idEquipo IN (${placeholders})`,
-    [idDisciplina, ...idsEquipos]
+    `SELECT idEquipo FROM equipo WHERE idDisciplina = ? AND idUsuario = ? AND idEquipo IN (${placeholders})`,
+    [idDisciplina, idUsuario, ...idsEquipos]
   );
   if (equipos.length !== idsEquipos.length) {
     throw crearError('Todos los equipos deben pertenecer a la disciplina del torneo.');
@@ -37,12 +37,13 @@ export const getTorneos = async (req, res) => {
       LEFT JOIN disciplina d ON t.idDisciplina = d.idDisciplina
       LEFT JOIN deporte dep ON d.idDeporte = dep.idDeporte
       LEFT JOIN formato f ON t.idFormato = f.idFormato
+      WHERE t.idUsuario = ?
       ORDER BY t.idTorneo DESC
     `;
 
     let rows;
     try {
-      [rows] = await pool.query(query);
+      [rows] = await pool.query(query, [req.user.idUsuario]);
     } catch {
       const fallbackQuery = `
         SELECT 
@@ -54,9 +55,10 @@ export const getTorneos = async (req, res) => {
         LEFT JOIN disciplina d ON t.idDisciplina = d.idDisciplina
         LEFT JOIN deporte dep ON d.idDeporte = dep.idDeporte
         LEFT JOIN formato f ON t.idFormato = f.idFormato
+        WHERE t.idUsuario = ?
         ORDER BY t.idTorneo DESC
       `;
-      [rows] = await pool.query(fallbackQuery);
+      [rows] = await pool.query(fallbackQuery, [req.user.idUsuario]);
     }
 
     const torneosNormalizados = rows.map(row => {
@@ -112,7 +114,7 @@ export const createTorneo = async (req, res) => {
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
-    await validarEquiposDeDisciplina(connection, idsEquipos, disciplinaId);
+    await validarEquiposDeDisciplina(connection, idsEquipos, disciplinaId, req.user.idUsuario);
     const [[formato]] = await connection.query(
       'SELECT nombreFormato FROM formato WHERE idFormato = ?',
       [formatoId]
@@ -120,9 +122,9 @@ export const createTorneo = async (req, res) => {
     if (!formato) throw crearError('El formato seleccionado no existe.');
 
     const [result] = await connection.query(
-      `INSERT INTO torneo (nombreTorneo, idDisciplina, idFormato, fechaInicio, descripcionTorneo, fechaFin, ubicacion, cantidadEquipos) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [nombreTorneo.trim(), disciplinaId, formatoId, fechaInicio, descripcionTorneo || null, fechaFin || null, ubicacion || null, limiteEquipos]
+      `INSERT INTO torneo (idUsuario, nombreTorneo, idDisciplina, idFormato, fechaInicio, descripcionTorneo, fechaFin, ubicacion, cantidadEquipos)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.idUsuario, nombreTorneo.trim(), disciplinaId, formatoId, fechaInicio, descripcionTorneo || null, fechaFin || null, ubicacion || null, limiteEquipos]
     );
 
     const nuevoIdTorneo = result.insertId;
@@ -145,7 +147,11 @@ export const createTorneo = async (req, res) => {
 export const deleteTorneo = async (req, res) => {
   const { id } = req.params;
   try {
-    await pool.query('DELETE FROM torneo WHERE idTorneo = ?', [id]);
+    const [resultado] = await pool.query(
+      'DELETE FROM torneo WHERE idTorneo = ? AND idUsuario = ?',
+      [id, req.user.idUsuario]
+    );
+    if (resultado.affectedRows === 0) return res.status(404).json({ error: 'No se encontró el torneo.' });
     res.json({ message: 'Torneo eliminado con éxito' });
   } catch (error) {
     res.status(500).json({ error: 'Error al eliminar torneo', details: error.message });
@@ -168,7 +174,8 @@ export const actualizarEquiposTorneo = async (req, res) => {
     connection = await pool.getConnection();
     await connection.beginTransaction();
     const [[torneo]] = await connection.query(
-      'SELECT idDisciplina FROM torneo WHERE idTorneo = ? FOR UPDATE', [id]
+      'SELECT idDisciplina FROM torneo WHERE idTorneo = ? AND idUsuario = ? FOR UPDATE',
+      [id, req.user.idUsuario]
     );
     if (!torneo) throw crearError('No se encontró el torneo.', 404);
 
@@ -178,7 +185,7 @@ export const actualizarEquiposTorneo = async (req, res) => {
     if (Number(cantidadPartidos) > 0) {
       throw crearError('No se pueden cambiar los participantes después de generar los partidos.');
     }
-    await validarEquiposDeDisciplina(connection, idsEquipos, torneo.idDisciplina);
+    await validarEquiposDeDisciplina(connection, idsEquipos, torneo.idDisciplina, req.user.idUsuario);
     await connection.query('DELETE FROM torneo_equipo WHERE idTorneo = ?', [id]);
     await connection.query(
       'INSERT INTO torneo_equipo (idTorneo, idEquipo) VALUES ?',
@@ -205,9 +212,9 @@ export const generarFixture = async (req, res) => {
       SELECT t.idTorneo, f.nombreFormato
       FROM torneo t
       JOIN formato f ON f.idFormato = t.idFormato
-      WHERE t.idTorneo = ?
+      WHERE t.idTorneo = ? AND t.idUsuario = ?
       FOR UPDATE
-    `, [id]);
+    `, [id, req.user.idUsuario]);
     if (!torneo) throw crearError('No se encontró el torneo.', 404);
 
     const [[{ cantidadPartidos }]] = await connection.query(
@@ -247,8 +254,8 @@ export const getPartidosTorneo = async (req, res) => {
         local.nombreEquipo AS equipoLocal,
         p.idEquipoVisitante,
         visitante.nombreEquipo AS equipoVisitante,
-        p.golesLocal,
-        p.golesVisitante,
+        p.marcadorLocal AS golesLocal,
+        p.marcadorVisitante AS golesVisitante,
         p.jornada,
         p.tipoEtapa,
         p.nombreRonda,
@@ -257,11 +264,12 @@ export const getPartidosTorneo = async (req, res) => {
         p.idPartidoOrigenVisitante,
         p.estado
       FROM partido p
+      JOIN torneo t ON t.idTorneo = p.idTorneo AND t.idUsuario = ?
       LEFT JOIN equipo local ON local.idEquipo = p.idEquipoLocal
       LEFT JOIN equipo visitante ON visitante.idEquipo = p.idEquipoVisitante
       WHERE p.idTorneo = ?
       ORDER BY p.jornada, p.numeroPartido, p.idPartido
-    `, [id]);
+    `, [req.user.idUsuario, id]);
     res.json(partidos);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener los partidos del torneo', details: error.message });
