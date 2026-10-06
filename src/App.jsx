@@ -32,9 +32,9 @@ function RutasAplicacion() {
   }
 
   return (
-    <div className="flex max-h-screen flex-col md:flex-row md:overflow-hidden">
+    <div className="flex min-h-screen flex-col md:h-screen md:max-h-screen md:flex-row md:overflow-hidden">
       <Navbar role={user.nombre} onLogout={logout} />
-      <main className="flex-1 bg-slate-50 p-4 md:mt-3 md:overflow-auto md:p-6 md:pt-14">
+      <main className="min-w-0 flex-1 bg-slate-50 p-4 md:mt-3 md:overflow-auto md:p-6 md:pt-14">
         <Routes>
           <Route path="/" element={<Navigate to="/inicio" replace />} />
           <Route path="/inicio" element={<Inicio />} />

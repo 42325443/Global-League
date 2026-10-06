@@ -3,6 +3,17 @@ import { generarFixtureEnTransaccion } from '../services/fixtureService.js';
 
 const crearError = (mensaje, status = 400) => Object.assign(new Error(mensaje), { status });
 
+const estadoTorneoCalculadoSql = `
+  CASE
+    WHEN t.estadoGestion = 'Cancelado' THEN 'Cancelado'
+    WHEN t.estadoGestion = 'Suspendido' THEN 'Suspendido'
+    WHEN t.estadoGestion = 'Cerrado' THEN 'Finalizado'
+    WHEN CURDATE() < t.fechaInicio THEN 'Próximo'
+    WHEN t.fechaFin IS NOT NULL AND CURDATE() > t.fechaFin THEN 'Finalizado'
+    ELSE 'En Curso'
+  END AS estadoCalculado
+`;
+
 const normalizarIdsEquipos = (equiposIds) => {
   if (!Array.isArray(equiposIds)) throw crearError('Seleccioná al menos 2 equipos para el torneo.');
   const ids = equiposIds.map(Number);
@@ -31,6 +42,7 @@ export const getTorneos = async (req, res) => {
       SELECT 
         t.idTorneo, t.nombreTorneo, t.idDisciplina, t.idFormato, t.fechaInicio, 
         t.fechaFin, t.ubicacion, t.cantidadEquipos, t.descripcionTorneo,
+        ${estadoTorneoCalculadoSql},
         d.nombreDisciplina, dep.nombreDeporte, f.nombreFormato,
         (SELECT COUNT(*) FROM torneo_equipo te WHERE te.idTorneo = t.idTorneo) AS equiposInscriptos
       FROM torneo t
@@ -49,6 +61,7 @@ export const getTorneos = async (req, res) => {
         SELECT 
           t.idTorneo, t.nombreTorneo, t.idDisciplina, t.idFormato, t.fechaInicio, 
           t.fechaFin, t.ubicacion, t.cantidadEquipos, t.descripcionTorneo,
+          ${estadoTorneoCalculadoSql},
           d.nombreDisciplina, dep.nombreDeporte, f.nombreFormato,
           0 AS equiposInscriptos
         FROM torneo t
@@ -76,7 +89,7 @@ export const getTorneos = async (req, res) => {
         ubicacion: row.ubicacion || 'Sin asignar',
         cantidadEquiposMax: limiteVal,
         equiposInscriptos: row.equiposInscriptos || 0,
-        estado: 'Próximo'
+        estado: row.estadoCalculado || 'Próximo'
       };
     });
     res.json(torneosNormalizados);

@@ -248,7 +248,9 @@ export default function Torneos() {
     const styles = {
       'En Curso': 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
       'Próximo': 'bg-amber-50 text-amber-700 ring-amber-600/20',
-      'Finalizado': 'bg-red-50 text-red-700 ring-red-600/20'
+      'Finalizado': 'bg-red-50 text-red-700 ring-red-600/20',
+      'Suspendido': 'bg-slate-100 text-slate-700 ring-slate-500/20',
+      'Cancelado': 'bg-red-50 text-red-700 ring-red-600/20'
     };
     return (
       <span

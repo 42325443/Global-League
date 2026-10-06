@@ -73,24 +73,31 @@ export function Navbar({ role = 'Organizador', onLogout }) {
   return (
     <>
       {/* BARRA SUPERIOR - MOBILE */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white shadow">
+      <header className="sticky top-0 z-30 flex min-h-14 items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 shadow-sm backdrop-blur md:hidden">
 
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2">
 
           <button
             ref={openButtonRef}
             onClick={() => setOpen(true)}
             aria-label="Abrir menú"
             aria-expanded={open}
-            className="p-2 rounded-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-400"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-400"
           >
 
-            <NavIcon name="menu" className="w-6 h-6 text-slate-700" />
+            <NavIcon name="menu" className="h-5 w-5 text-slate-700" />
 
           </button>
 
-          <h2 className="text-xl font-extrabold font-montserrat cursor-pointer">Global League</h2>
+          <h2 className="truncate text-base font-extrabold font-montserrat sm:text-lg">Global League</h2>
 
+        </div>
+
+        <div
+          id="userRoleMobile"
+          className="flex h-8 max-w-28 shrink-0 items-center justify-center rounded-full bg-green-500 px-3 text-xs"
+        >
+          <span className="truncate font-semibold text-white">{role}</span>
         </div>
 
       </header>
@@ -159,21 +166,6 @@ export function Navbar({ role = 'Organizador', onLogout }) {
         </div>
 
       </header>
-
-      {/* HEADER SUPERIOR - MOBILE */}
-      <div className="md:hidden absolute top-3 right-4 z-30">
-
-        <div
-          id="userRoleMobile"
-          className="h-8 w-30 text-xs bg-green-400 rounded-4xl flex items-center justify-center select-none cursor-pointer hover:bg-green-600"
-        >
-
-          <span className="font-semibold text-white">{role}</span>
-
-        </div>
-
-      </div>
-
 
       {/* SLIDER - MOBILE */}
       <div className={`fixed inset-0 z-40 md:hidden transition-opacity ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>

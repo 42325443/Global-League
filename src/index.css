@@ -8,3 +8,13 @@ body{
 li{
   font-family: 'Inter';
 }
+
+.calendar-day-cell {
+  min-height: 88px;
+}
+
+@media (min-width: 768px) {
+  .calendar-day-cell {
+    min-height: 128px;
+  }
+}
