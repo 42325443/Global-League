@@ -209,8 +209,8 @@ export default function Calendario() {
   };
 
   return (
-    <div className="mx-auto space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className={`mx-auto flex min-w-0 flex-col gap-4 ${modoAsignacion ? 'pb-8' : 'h-[calc(100dvh-88px)] min-h-0 overflow-hidden md:h-[calc(100dvh-92px)]'}`}>
+      <header className="flex shrink-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-bold text-lime-700">Gestión deportiva</p>
           <h1 className="text-2xl font-bold">Calendario</h1>

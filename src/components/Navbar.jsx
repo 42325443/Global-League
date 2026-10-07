@@ -153,7 +153,7 @@ export function Navbar({ role = 'Organizador', onLogout }) {
       {/* HEADER SUPERIOR - ESCRITORIO */}
       <header
         id="userHeader"
-        className="hidden md:flex md:fixed md:top-0 md:left-55 md:right-0 md:h-14 md:items-center md:justify-end md:border-b md:border-slate-300 md:px-5 bg-white z-0"
+        className="hidden md:flex md:fixed md:top-0 md:left-55 md:right-0 md:z-30 md:h-14 md:items-center md:justify-end md:border-b md:border-slate-300 md:px-5 bg-white"
       >
 
         <div
