@@ -1,5 +1,18 @@
-const agregarJugador = (e) => {
-  e.preventDefault();
+export const agregarJugador = ({
+  event,
+  nombreJugador,
+  apellidoJugador,
+  dniJugador,
+  equipos,
+  equipoSeleccionado,
+  setEquipos,
+  setNombreJugador,
+  setApellidoJugador,
+  setDniJugador,
+  setMostrarJugador,
+  setEquipoSeleccionado,
+}) => {
+  event.preventDefault();
 
   if (
     !nombreJugador.trim() ||

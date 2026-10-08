@@ -7,7 +7,9 @@ import {
   ScaleIcon,
   CalendarIcon,
   XMarkIcon,
-  Bars3Icon
+  Bars3Icon,
+  DocumentTextIcon,
+  TableCellsIcon
 } from '@heroicons/react/24/solid';
 
 export const ICONS = {
@@ -18,5 +20,7 @@ export const ICONS = {
   referees: ScaleIcon,
   calendar: CalendarIcon,
   close: XMarkIcon,
-  menu: Bars3Icon
+  menu: Bars3Icon,
+  document: DocumentTextIcon,
+  table: TableCellsIcon
 };

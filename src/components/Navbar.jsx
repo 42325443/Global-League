@@ -1,172 +1,280 @@
-// src/components/Navbar.jsx
+// Ruta del componente: src/components/Navbar.jsx
 import { useState, useRef, useEffect } from 'react';
+import { NavLink } from 'react-router-dom';
 import { ICONS } from '../icons';
 
+// Arreglo para cargar vistas al navbar
 const NAV_ITEMS = [
-  { name: 'Inicio', slug: 'inicio', icon: 'home' },
-  { name: 'Torneos', slug: 'torneos', icon: 'trophy' },
-  { name: 'Equipos', slug: 'equipos', icon: 'users' },
-  { name: 'Estadísticas', slug: 'estadisticas', icon: 'chart' },
-  { name: 'Árbitros', slug: 'arbitros', icon: 'referees' },
-  { name: 'Calendario', slug: 'calendario', icon: 'calendar' }
+  { name: 'Inicio', href: '/inicio', icon: 'home' },
+  { name: 'Torneos', href: '/torneos', icon: 'trophy' },
+  { name: 'Equipos', href: '/equipos', icon: 'users' },
+  { name: 'Estadísticas', href: '/estadisticas', icon: 'chart' },
+  { name: 'Árbitros', href: '/arbitros', icon: 'referees' },
+  { name: 'Calendario', href: '/calendario', icon: 'calendar' },
+  { name: 'Acta Digital', href: '/actas', icon: 'document' },
+  { name: 'Tabla de Posiciones', href: '/posiciones', icon: 'table' }
 ];
 
 function NavIcon({ name, className = 'w-5 h-5' }) {
   const Icon = ICONS[name];
-  if (!Icon) return null;
-  return <Icon className={className} aria-hidden="true" />;
+  return Icon ? <Icon className={className} aria-hidden="true" /> : null;
 }
 
-// Agregamos onNavigate y seccionActual a las propiedades que recibe la barra
-export function Navbar({ user = 'User', role = 'Admin', onNavigate, seccionActual }) {
+export function Navbar({ role = 'Organizador', onLogout }) {
   const [open, setOpen] = useState(false);
+  const [confirmarCierreSesion, setConfirmarCierreSesion] = useState(false);
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const panelRef = useRef(null);
   const openButtonRef = useRef(null);
+  const cancelarCierreRef = useRef(null);
 
-  // Close on Escape and restore focus
+  const solicitarCierreSesion = () => {
+    setOpen(false);
+    setConfirmarCierreSesion(true);
+  };
+
+  const confirmarCierre = async () => {
+    if (cerrandoSesion) return;
+    setCerrandoSesion(true);
+    try {
+      await onLogout?.();
+    } finally {
+      setConfirmarCierreSesion(false);
+      setCerrandoSesion(false);
+    }
+  };
+
   useEffect(() => {
     function onKey(e) {
       if (e.key === 'Escape') setOpen(false);
     }
     if (open) {
       document.addEventListener('keydown', onKey);
-      panelRef.current?.querySelector('button')?.focus();
+      panelRef.current?.querySelector('a,button')?.focus();
     } else {
       openButtonRef.current?.focus();
     }
     return () => document.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const handleMenuClick = (slug) => {
-    if (onNavigate) {
-      onNavigate(slug); // Le avisa a App.jsx qué pantalla renderizar
-    }
-    setOpen(false); // Cierra el menú mobile si estuviera abierto
-  };
+  useEffect(() => {
+    if (!confirmarCierreSesion) return undefined;
+
+    cancelarCierreRef.current?.focus();
+    const onKey = (event) => {
+      if (event.key === 'Escape' && !cerrandoSesion) setConfirmarCierreSesion(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [confirmarCierreSesion, cerrandoSesion]);
+
+  const linkClasses = (isActive) =>
+    `flex items-center gap-3 px-3 py-2 rounded-md transition-colors select-none
+     ${isActive ? 'bg-lime-500 text-white font-semibold' : 'text-slate-700 hover:bg-lime-500 hover:text-white'}`;
 
   return (
     <>
-      {/* Mobile top bar */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white shadow-sm border-b border-slate-100 w-full fixed top-0 left-0 z-30">
-        <div className="flex items-center gap-3">
+      {/* BARRA SUPERIOR - MOBILE */}
+      <header className="sticky top-0 z-30 flex min-h-14 items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 shadow-sm backdrop-blur md:hidden">
+
+        <div className="flex min-w-0 items-center gap-2">
+
           <button
             ref={openButtonRef}
             onClick={() => setOpen(true)}
             aria-label="Abrir menú"
             aria-expanded={open}
-            className="p-2 rounded-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-400"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-400"
           >
-            <NavIcon name="menu" className="w-6 h-6 text-slate-700" />
+
+            <NavIcon name="menu" className="h-5 w-5 text-slate-700" />
+
           </button>
-          <h2 className="text-xl font-extrabold font-montserrat cursor-pointer">Global League</h2>
+
+          <h2 className="truncate text-base font-extrabold font-montserrat sm:text-lg">Global League</h2>
+
         </div>
+
+        <div
+          id="userRoleMobile"
+          className="flex h-8 max-w-28 shrink-0 items-center justify-center rounded-full bg-green-500 px-3 text-xs"
+        >
+          <span className="truncate font-semibold text-white">{role}</span>
+        </div>
+
       </header>
 
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex md:flex-col md:justify-between md:w-64 md:h-screen md:py-6 md:px-4 md:border-r md:border-slate-200 md:shadow-sm bg-white sticky top-0 shrink-0">
+      {/* BARRA LATERAL - ESCRITORIO */}
+      <aside className="hidden md:flex md:flex-col md:items-center md:justify-between md:w-55 md:min-h-screen md:py-6 md:px-4 md:border-r md:border-slate-200 md:shadow-sm bg-white">
+        
         <div className="w-full">
-          <h1 className="text-2xl font-black mb-6 px-3 cursor-default select-none">Global League</h1>
+
+          <h1 className="text-2xl font-black mb-6 select-none">Global League</h1>
 
           <nav aria-label="Navegación principal">
-            <ul className="space-y-1">
+
+            <ul>
+
+              {/* Mapeamos el arreglo NAV_ITEMS para mostrar las diferentes opciones dentro del Nav */}
               {NAV_ITEMS.map(item => (
-                <li key={item.slug}>
-                  <button
-                    type="button"
-                    onClick={() => handleMenuClick(item.slug)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors font-medium text-left ${
-                      seccionActual === item.slug 
-                        ? 'bg-lime-500 text-white font-semibold' 
-                        : 'text-slate-700 hover:bg-lime-500 hover:text-white'
-                    }`}
+
+                <li key={item.name} className='my-1'>
+                  
+                  {/* La etiqueta Navlink nos ayuda con el enrutamiento que toma lugar en el archivo App.jsx */}
+                  <NavLink
+                    to={item.href}
+                    className={({ isActive }) => linkClasses(isActive)}
                   >
-                    <NavIcon name={item.icon} className="w-5 h-5" />
+
+                    <NavIcon name={item.icon} />
+
                     <span>{item.name}</span>
-                  </button>
+
+                  </NavLink>
+
                 </li>
+
               ))}
+
             </ul>
+
           </nav>
+
         </div>
 
-        {/* Footer de la barra lateral */}
-        <div className="w-full space-y-4">
-          <div className="flex items-center gap-3 bg-lime-300 p-3 rounded-xl shadow-sm w-full">
-            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center overflow-hidden shrink-0 border border-lime-400">
-              <NavIcon name="user" className="w-6 h-6 text-slate-500" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-semibold truncate">{user}</div>
-              <div className="text-xs text-slate-700 truncate">Rol: {role}</div>
-            </div>
-          </div>
+        <button
+          type="button"
+          onClick={solicitarCierreSesion}
+          className="mt-4 w-full rounded-md border border-red-200 py-2 font-semibold text-red-600 transition-colors hover:bg-red-500 hover:text-white"
+        >
+          Cerrar sesión
+        </button>
 
-          <button
-            className="w-full text-red-600 border border-red-200 hover:bg-red-500 hover:text-white rounded-md py-2 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
-            type="button"
-          >
-            Cerrar sesión
-          </button>
-        </div>
       </aside>
 
-      {/* Mobile slide-over */}
-      <div
-        className={`fixed inset-0 z-40 md:hidden transition-opacity duration-300 ${open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-        aria-hidden={!open}
+      {/* HEADER SUPERIOR - ESCRITORIO */}
+      <header
+        id="userHeader"
+        className="hidden md:flex md:fixed md:top-0 md:left-55 md:right-0 md:z-30 md:h-14 md:items-center md:justify-end md:border-b md:border-slate-300 md:px-5 bg-white"
       >
-        <div
-          className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0'}`}
-          onClick={() => setOpen(false)}
-        />
 
         <div
-          ref={panelRef}
-          className={`absolute left-0 top-0 bottom-0 w-64 h-screen bg-white shadow-lg flex flex-col justify-between transform transition-transform duration-300 ${open ? 'translate-x-0' : '-translate-x-full'}`}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Menú lateral"
+          id="userRole"
+          className="h-10 w-40 bg-green-400 text-sm rounded-4xl flex items-center justify-center select-none cursor-pointer hover:bg-green-600"
         >
-          <div>
-            <div className="p-4 flex items-center justify-between border-b border-slate-100">
-              <h2 className="text-lg font-bold cursor-default select-none">Global League</h2>
-              <button onClick={() => setOpen(false)} aria-label="Cerrar menú" className="p-2 rounded-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-400">
-                <NavIcon name="close" className="w-5 h-5 text-slate-700" />
-              </button>
-            </div>
 
-            <nav className="p-4">
-              <ul className="space-y-1">
-                {NAV_ITEMS.map(item => (
-                  <li key={item.slug}>
-                    <button
-                      type="button"
-                      onClick={() => handleMenuClick(item.slug)}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors font-medium text-left ${
-                        seccionActual === item.slug 
-                          ? 'bg-lime-500 text-white font-semibold' 
-                          : 'text-slate-700 hover:bg-lime-500 hover:text-white'
-                      }`}
-                    >
-                      <NavIcon name={item.icon} className="w-5 h-5" />
-                      <span>{item.name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </nav>
+          <span className="font-semibold text-white">{role}</span>
+
+        </div>
+
+      </header>
+
+      {/* SLIDER - MOBILE */}
+      <div className={`fixed inset-0 z-40 md:hidden transition-opacity ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+
+        <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
+
+        <div ref={panelRef} className={`absolute left-0 top-0 bottom-0 w-64 h-screen bg-white shadow-lg transform transition-transform ${open ? 'translate-x-0' : '-translate-x-full'}`}>
+          
+          <div className="p-4 flex items-center justify-between">
+
+            <h2 className="text-lg font-bold">Global League</h2>
+
+            <button onClick={() => setOpen(false)} aria-label="Cerrar menú" className="p-2 rounded-md hover:bg-slate-100">
+
+              <NavIcon name="close" />
+
+            </button>
+
           </div>
+          
+          <nav className="px-2 py-3">
 
-          <div className="p-4 border-t border-slate-100">
+            <ul className="space-y-1">
+
+              {NAV_ITEMS.map(item => (
+
+                <li key={item.name}>
+
+                  <NavLink
+                    to={item.href}
+                    onClick={() => setOpen(false)}
+                    className={({ isActive }) => linkClasses(isActive)}
+                  >
+
+                    <NavIcon name={item.icon} />
+
+                    <span>{item.name}</span>
+
+                  </NavLink>
+
+                </li>
+                
+              ))}
+
+            </ul>
+
+          </nav>
+
+          <div className="absolute bottom-4 left-0 w-full px-4">
             <button
-              className="w-full text-red-600 border border-red-200 hover:bg-red-500 hover:text-white rounded-md py-2 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
               type="button"
+              onClick={solicitarCierreSesion}
+              className="w-full rounded-md border border-red-200 py-2 font-semibold text-red-600 transition-colors hover:bg-red-500 hover:text-white"
             >
               Cerrar sesión
             </button>
           </div>
+
         </div>
+
       </div>
+
+      {confirmarCierreSesion && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Cancelar cierre de sesión"
+            className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
+            onClick={() => !cerrandoSesion && setConfirmarCierreSesion(false)}
+            disabled={cerrandoSesion}
+          />
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirmar-cierre-titulo"
+            aria-describedby="confirmar-cierre-descripcion"
+            className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+          >
+            <h2 id="confirmar-cierre-titulo" className="text-lg font-bold text-slate-900">
+              ¿Querés cerrar sesión?
+            </h2>
+            <p id="confirmar-cierre-descripcion" className="mt-2 text-sm text-slate-600">
+              Vas a salir de tu cuenta y volver a la pantalla de inicio de sesión.
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                ref={cancelarCierreRef}
+                type="button"
+                onClick={() => setConfirmarCierreSesion(false)}
+                disabled={cerrandoSesion}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Seguir conectado
+              </button>
+              <button
+                type="button"
+                onClick={confirmarCierre}
+                disabled={cerrandoSesion}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {cerrandoSesion ? 'Cerrando sesión…' : 'Cerrar sesión'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
     </>
   );
 }

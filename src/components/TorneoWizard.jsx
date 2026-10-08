@@ -1,0 +1,491 @@
+// src/components/TorneoWizard.jsx
+import { useState, useEffect } from 'react';
+import { apiFetch } from '../lib/api';
+
+export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
+  const [paso, setPaso] = useState(1);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState(null);
+  const [errorEquipos, setErrorEquipos] = useState('');
+  const [cargandoEquipos, setCargandoEquipos] = useState(true);
+
+  // Catálogos desde el backend
+  const [deportes, setDeportes] = useState([]);
+  const [disciplinas, setDisciplinas] = useState([]);
+  const [formatos, setFormatos] = useState([]);
+
+  // Estado para la gestión de equipos
+  const [equiposDisponibles, setEquiposDisponibles] = useState([]);
+  const [equiposSeleccionados, setEquiposSeleccionados] = useState([]);
+
+  // Estado del formulario
+  const [formData, setFormData] = useState({
+    nombreTorneo: '',
+    descripcionTorneo: '',
+    idDeporte: '',
+    idDisciplina: '',
+    idFormato: '',
+    fechaInicio: '',
+    fechaFin: '',
+    ubicacion: 'Campus Rosario',
+    cantidadEquiposMax: 12
+  });
+
+  const equiposDeLaDisciplina = equiposDisponibles.filter(
+    (equipo) => String(equipo.idDisciplina) === String(formData.idDisciplina)
+  );
+  const limiteSeleccion = formData.cantidadEquiposMax === 'Sin limite'
+    ? Number.POSITIVE_INFINITY
+    : Number(formData.cantidadEquiposMax);
+
+  useEffect(() => {
+    apiFetch('/catalogos/deportes')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (data && data.length > 0) setDeportes(data);
+        else throw new Error();
+      })
+      .catch(() => {
+        setDeportes([
+          { id_deporte: 1, nombre: 'Fútbol' },
+          { id_deporte: 2, nombre: 'Básquet' },
+          { id_deporte: 3, nombre: 'Vóley' }
+        ]);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (formData.idDeporte) {
+      const idDep = Number(formData.idDeporte);
+
+      apiFetch(`/catalogos/disciplinas?idDeporte=${idDep}`)
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          const filtradas = data.filter(
+            (disc) => Number(disc.id_deporte || disc.idDeporte) === idDep
+          );
+          if (filtradas.length > 0) {
+            setDisciplinas(filtradas);
+          } else {
+            throw new Error();
+          }
+        })
+        .catch(() => {
+          if (idDep === 1) {
+            setDisciplinas([
+              { id_disciplina: 1, nombre: 'Fútbol 11' },
+              { id_disciplina: 2, nombre: 'Futsal' },
+              { id_disciplina: 3, nombre: 'Fútbol 7' }
+            ]);
+          } else if (idDep === 2) {
+            setDisciplinas([
+              { id_disciplina: 4, nombre: 'Básquet 5v5' },
+              { id_disciplina: 5, nombre: 'Básquet 3x3' }
+            ]);
+          } else if (idDep === 3) {
+            setDisciplinas([
+              { id_disciplina: 6, nombre: 'Vóley 6v6' },
+              { id_disciplina: 7, nombre: 'Vóley Playa (2v2)' }
+            ]);
+          } else {
+            setDisciplinas([]);
+          }
+        });
+    }
+  }, [formData.idDeporte]);
+
+  useEffect(() => {
+    apiFetch('/catalogos/formatos')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setFormatos(data))
+      .catch(() => {
+        setFormatos([
+          { id_formato: 1, nombre: 'Liga', descripcion: 'Todos contra todos por puntos' },
+          { id_formato: 2, nombre: 'Eliminatoria', descripcion: 'Cuadro de eliminación directa (Brackets)' }
+        ]);
+      });
+  }, []);
+
+  useEffect(() => {
+    apiFetch('/equipos')
+      .then((res) => {
+        if (!res.ok) throw new Error('No se pudieron cargar los equipos.');
+        return res.json();
+      })
+      .then((data) => {
+        if (!Array.isArray(data)) throw new Error('La respuesta de equipos no es válida.');
+        setEquiposDisponibles(data);
+      })
+      .catch((fetchError) => setErrorEquipos(fetchError.message || 'No se pudieron cargar los equipos.'))
+      .finally(() => setCargandoEquipos(false));
+  }, []);
+
+  const handleChangeInput = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const toggleSeleccionarEquipo = (equipo) => {
+    setEquiposSeleccionados((seleccionados) => {
+      if (seleccionados.some((e) => Number(e.id) === Number(equipo.id))) {
+        return seleccionados.filter((e) => Number(e.id) !== Number(equipo.id));
+      }
+      if (seleccionados.length >= limiteSeleccion) return seleccionados;
+      return [...seleccionados, equipo];
+    });
+  };
+
+  const handleSeleccionDeporte = (deporte) => {
+    setFormData((prev) => ({ ...prev, idDeporte: deporte.idDeporte || deporte.id_deporte, idDisciplina: '' }));
+    setEquiposSeleccionados([]);
+  };
+
+  const handleSeleccionDisciplina = (disciplina) => {
+    const idDisciplina = disciplina.idDisciplina || disciplina.id_disciplina;
+    setFormData((prev) => ({ ...prev, idDisciplina }));
+    setEquiposSeleccionados((seleccionados) => (
+      seleccionados.filter((equipo) => String(equipo.idDisciplina) === String(idDisciplina))
+    ));
+  };
+
+  const handleFinalizar = async (e) => {
+    e.preventDefault();
+    if (equiposSeleccionados.length < 2) {
+      setError('Seleccioná al menos 2 equipos para crear los partidos del torneo.');
+      return;
+    }
+    if (equiposSeleccionados.length > limiteSeleccion) {
+      setError(`El límite del torneo es de ${limiteSeleccion} equipos.`);
+      return;
+    }
+    if (formData.fechaFin < formData.fechaInicio) {
+      setError('La fecha de fin debe ser igual o posterior a la fecha de inicio.');
+      return;
+    }
+    setCargando(true);
+    setError(null);
+
+    const payload = {
+      nombreTorneo: formData.nombreTorneo,
+      descripcionTorneo: formData.descripcionTorneo,
+      idDisciplina: Number(formData.idDisciplina),
+      idFormato: Number(formData.idFormato),
+      fechaInicio: formData.fechaInicio,
+      fechaFin: formData.fechaFin,
+      ubicacion: formData.ubicacion,
+      cantidadEquiposMax: formData.cantidadEquiposMax,
+      equiposIds: equiposSeleccionados.map((eq) => eq.id)
+    };
+
+    try {
+      const response = await apiFetch('/torneos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const resultado = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(resultado.error || 'No se pudo guardar el torneo.');
+
+      if (onTorneoCreado) onTorneoCreado(resultado);
+      if (onVolver) onVolver();
+    } catch (saveError) {
+      setError(saveError.message || 'No se pudo conectar con el servidor.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  return (
+    <div className="w-full max-w-3xl mx-auto bg-slate-900 text-slate-100 p-6 md:p-8 rounded-2xl shadow-2xl border border-slate-800">
+      <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
+        <div>
+          <span className="text-xs font-bold uppercase tracking-wider text-blue-400">Paso {paso} de 4</span>
+          <h2 className="text-2xl font-bold tracking-tight text-white">Crear Nuevo Torneo</h2>
+        </div>
+        <button
+          type="button"
+          onClick={onVolver}
+          className="text-slate-400 hover:text-white transition-colors cursor-pointer text-sm font-medium"
+        >
+          ✕ Cancelar
+        </button>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2 mb-8">
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className={`h-1.5 rounded-full transition-all duration-300 ${
+              i <= paso ? 'bg-blue-500' : 'bg-slate-800'
+            }`}
+          />
+        ))}
+      </div>
+
+      {paso === 1 && (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-200 mb-3">1. Selecciona el Deporte</h3>
+            <div className="grid grid-cols-3 gap-3">
+              {deportes.map((dep) => {
+                const idDeporte = dep.idDeporte || dep.id_deporte;
+                const selected = String(formData.idDeporte) === String(idDeporte);
+                return (
+                  <button
+                    key={idDeporte}
+                    type="button"
+                    onClick={() => handleSeleccionDeporte(dep)}
+                    className={`p-4 rounded-xl border text-center transition-all cursor-pointer ${
+                      selected
+                        ? 'border-blue-500 bg-blue-500/10 text-white font-bold'
+                        : 'border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    {dep.nombre}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {formData.idDeporte && (
+            <div>
+              <h3 className="text-lg font-semibold text-slate-200 mb-3">2. Selecciona la Disciplina</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {disciplinas.map((disc) => {
+                  const idDisciplina = disc.idDisciplina || disc.id_disciplina;
+                  const selected = String(formData.idDisciplina) === String(idDisciplina);
+                  return (
+                    <button
+                      key={idDisciplina}
+                      type="button"
+                      onClick={() => handleSeleccionDisciplina(disc)}
+                      className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                        selected
+                          ? 'border-blue-500 bg-blue-500/10 text-white font-bold'
+                          : 'border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold">{disc.nombre}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {paso === 2 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-slate-200 mb-2">Formato de Competición</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {formatos.map((fmt) => {
+              const selected = String(formData.idFormato) === String(fmt.id_formato);
+              return (
+                <button
+                  key={fmt.id_formato}
+                  type="button"
+                  onClick={() => setFormData((p) => ({ ...p, idFormato: fmt.id_formato }))}
+                  className={`p-5 rounded-xl border text-left transition-all cursor-pointer ${
+                    selected
+                      ? 'border-blue-500 bg-blue-500/10 text-white font-bold shadow-lg shadow-blue-500/10'
+                      : 'border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                  }`}
+                >
+                  <span className="block text-base font-semibold mb-1 text-slate-100">{fmt.nombre}</span>
+                  <span className="block text-xs text-slate-400 font-normal">{fmt.descripcion}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {paso === 3 && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-200">Equipos Participantes</h3>
+              <p className="text-xs text-slate-400">Seleccioná equipos ya registrados en el sistema.</p>
+            </div>
+          </div>
+
+          {cargandoEquipos ? (
+            <p className="text-sm text-slate-400">Cargando equipos...</p>
+          ) : errorEquipos ? (
+            <p role="alert" className="text-sm text-red-400">{errorEquipos}</p>
+          ) : equiposDisponibles.length === 0 ? (
+            <p className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300">
+              Todavía no hay equipos guardados. Creá un equipo desde la pestaña Equipos y volvé a este paso.
+            </p>
+          ) : !formData.idDisciplina ? (
+            <p className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300">
+              Seleccioná una disciplina en el primer paso para ver los equipos compatibles.
+            </p>
+          ) : equiposDeLaDisciplina.length === 0 ? (
+            <p className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300">
+              No hay equipos guardados para la disciplina seleccionada.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-56 overflow-y-auto pr-1">
+              {equiposDeLaDisciplina.map((eq) => {
+                const seleccionado = equiposSeleccionados.some((e) => Number(e.id) === Number(eq.id));
+                const limiteAlcanzado = equiposSeleccionados.length >= limiteSeleccion && !seleccionado;
+                return (
+                  <button
+                    key={eq.id}
+                    type="button"
+                    onClick={() => toggleSeleccionarEquipo(eq)}
+                    disabled={limiteAlcanzado}
+                    className={`p-3 rounded-lg border text-left text-xs font-semibold transition-all cursor-pointer flex justify-between items-center ${
+                      seleccionado
+                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
+                        : limiteAlcanzado
+                          ? 'border-slate-800 bg-slate-800/20 text-slate-600 cursor-not-allowed'
+                          : 'border-slate-800 bg-slate-800/30 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span>{eq.nombre || eq.nombreEquipo}</span>
+                    {seleccionado && <span>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <p className="text-xs text-slate-400 font-medium">
+            Equipos seleccionados: <strong className="text-white">{equiposSeleccionados.length}</strong>
+          </p>
+          {equiposSeleccionados.length < 2 && (
+            <p className="text-xs text-amber-300">Elegí al menos 2 equipos para generar el fixture automáticamente.</p>
+          )}
+          {Number.isFinite(limiteSeleccion) && (
+            <p className="text-xs text-slate-500">Límite actual: {limiteSeleccion} equipos.</p>
+          )}
+        </div>
+      )}
+
+      {paso === 4 && (
+        <form onSubmit={handleFinalizar} className="space-y-4">
+          <h3 className="text-lg font-semibold text-slate-200">Datos Básicos del Torneo</h3>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Nombre del Torneo *</label>
+            <input
+              type="text"
+              name="nombreTorneo"
+              required
+              value={formData.nombreTorneo}
+              onChange={handleChangeInput}
+              placeholder="Ej: Copa Apertura 2026"
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Fecha de Inicio *</label>
+              <input
+                type="date"
+                name="fechaInicio"
+                required
+                value={formData.fechaInicio}
+                onChange={handleChangeInput}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Fecha de Fin (Aproximada) *</label>
+              <input
+                type="date"
+                name="fechaFin"
+                required
+                min={formData.fechaInicio || undefined}
+                value={formData.fechaFin}
+                onChange={handleChangeInput}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Sede / Ubicación</label>
+              <input
+                type="text"
+                name="ubicacion"
+                value={formData.ubicacion}
+                onChange={handleChangeInput}
+                placeholder="Ej: Campus Rosario"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Límite de Equipos</label>
+              <select
+                name="cantidadEquiposMax"
+                value={formData.cantidadEquiposMax}
+                onChange={handleChangeInput}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+              >
+                <option value={4}>4 Equipos</option>
+                <option value={8}>8 Equipos</option>
+                <option value={12}>12 Equipos</option>
+                <option value={16}>16 Equipos</option>
+                <option value={24}>24 Equipos</option>
+                <option value={32}>32 Equipos</option>
+                <option value="Sin limite">Sin límite (N/A)</option>
+              </select>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {error && (
+        <p role="alert" className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {error}
+        </p>
+      )}
+
+      <div className="flex justify-between items-center mt-8 pt-4 border-t border-slate-800">
+        {paso > 1 ? (
+          <button
+            type="button"
+            onClick={() => setPaso((p) => p - 1)}
+            className="px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 text-xs font-semibold cursor-pointer"
+          >
+            Anterior
+          </button>
+        ) : (
+          <div />
+        )}
+
+        {paso < 4 ? (
+          <button
+            type="button"
+            onClick={() => setPaso((p) => p + 1)}
+            disabled={
+              (paso === 1 && (!formData.idDeporte || !formData.idDisciplina)) ||
+              (paso === 2 && !formData.idFormato) ||
+              (paso === 3 && (equiposSeleccionados.length < 2 || equiposSeleccionados.length > limiteSeleccion))
+            }
+            className="px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold text-xs hover:bg-blue-500 disabled:opacity-50 cursor-pointer"
+          >
+            Siguiente
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleFinalizar}
+            disabled={cargando || !formData.nombreTorneo || !formData.fechaInicio || !formData.fechaFin}
+            className="px-5 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-500 disabled:opacity-50 cursor-pointer"
+          >
+            {cargando ? 'Guardando...' : 'Guardar y Registrar Torneo'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};

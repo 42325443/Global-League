@@ -1,371 +1,252 @@
 import { useState } from "react";
 
-function CrearEquipo() {
-  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+const disciplinas = {
+  futbol: {
+    nombre: "Fútbol",
+    modalidades: [
+      "Fútbol 5",
+      "Fútbol 7",
+      "Fútbol 9",
+      "Fútbol 11",
+    ],
+  },
 
+  basquet: {
+    nombre: "Básquet",
+    modalidades: [
+      "Básquet",
+    ],
+  },
+
+  voley: {
+    nombre: "Vóley",
+    modalidades: [
+      "Vóley",
+    ],
+  },
+};
+
+const categorias = [
+  "Sub 13",
+  "Sub 18",
+  "E",
+  "D",
+  "C",
+  "B",
+  "A",
+];
+
+export default function CrearEquipo() {
   const [nombre, setNombre] = useState("");
+  const [disciplina, setDisciplina] = useState("");
+  const [modalidad, setModalidad] = useState("");
   const [categoria, setCategoria] = useState("");
   const [localidad, setLocalidad] = useState("");
+  const [capitan, setCapitan] = useState("");
 
-  const [equipos, setEquipos] = useState([]);
+  const handleDisciplinaChange = (e) => {
+    const nuevaDisciplina = e.target.value;
 
-  // Estados para agregar jugador
-  const [equipoSeleccionado, setEquipoSeleccionado] = useState(null);
-  const [mostrarJugador, setMostrarJugador] = useState(false);
+    setDisciplina(nuevaDisciplina);
 
-  const [nombreJugador, setNombreJugador] = useState("");
-  const [apellidoJugador, setApellidoJugador] = useState("");
-  const [dniJugador, setDniJugador] = useState("");
+    // Cuando cambia la disciplina,
+    // reiniciamos la modalidad seleccionada.
+    setModalidad("");
+  };
 
-  const crearEquipo = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-
-    if (!nombre.trim() || !categoria || !localidad.trim()) {
-      alert("Por favor, completá todos los campos.");
-      return;
-    }
 
     const nuevoEquipo = {
-      id: Date.now(),
-      nombre: nombre.trim(),
+      nombre,
+      disciplina,
+      modalidad,
       categoria,
-      localidad: localidad.trim(),
-      jugadores: [],
+      localidad,
+      capitan,
     };
 
-    setEquipos([...equipos, nuevoEquipo]);
+    console.log("Equipo creado:", nuevoEquipo);
 
-      setNombre("");
-      setCategoria("");
-      setLocalidad("");
+    alert("Equipo creado correctamente");
 
-      setMostrarFormulario(false);
-
-    alert("Equipo creado correctamente.");
-  };
-
-  // Abrir formulario para agregar jugador
-  const abrirFormularioJugador = (equipo) => {
-    setEquipoSeleccionado(equipo);
-
-    setNombreJugador("");
-    setApellidoJugador("");
-    setDniJugador("");
-
-    setMostrarJugador(true);
-  };
-
-  // Agregar jugador al equipo
-  const agregarJugador = (e) => {
-    e.preventDefault();
-
-    if (
-      !nombreJugador.trim() ||
-      !apellidoJugador.trim() ||
-      !dniJugador.trim()
-    ) {
-      alert("Por favor, completá todos los campos del jugador.");
-      return;
-    }
-
-    const nuevoJugador = {
-      id: Date.now(),
-      nombre: nombreJugador.trim(),
-      apellido: apellidoJugador.trim(),
-      dni: dniJugador.trim(),
-    };
-
-    setEquipos(
-      equipos.map((equipo) => {
-        if (equipo.id === equipoSeleccionado.id) {
-          return {
-            ...equipo,
-            jugadores: [...equipo.jugadores, nuevoJugador],
-          };
-        }
-
-        return equipo;
-      })
-    );
-
-    setNombreJugador("");
-    setApellidoJugador("");
-    setDniJugador("");
-
-    setMostrarJugador(false);
-    setEquipoSeleccionado(null);
-
-    alert("Jugador agregado correctamente.");
+    // Por ahora limpiamos el formulario.
+    setNombre("");
+    setDisciplina("");
+    setModalidad("");
+    setCategoria("");
+    setLocalidad("");
+    setCapitan("");
   };
 
   return (
-    <div className="p-6">
+    <div className="p-6 max-w-3xl mx-auto">
 
-      {/* BOTÓN CREAR EQUIPO */}
-      <button
-        onClick={() => setMostrarFormulario(true)}
-        className="rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
+      {/* Encabezado */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">
+          Crear equipo
+        </h1>
+
+        <p className="text-gray-500 mt-1">
+          Completá los datos del nuevo equipo.
+        </p>
+      </div>
+
+      {/* Formulario */}
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white border border-gray-200 rounded-xl shadow-sm p-6"
       >
-        Crear equipo
-      </button>
 
-      {/* FORMULARIO CREAR EQUIPO */}
-      {mostrarFormulario && (
-        <div className="mt-6 max-w-md rounded-lg border p-6 shadow">
+        {/* Nombre */}
+        <div className="mb-5">
+          <label className="block font-semibold mb-2">
+            Nombre del equipo
+          </label>
 
-          <h2 className="mb-4 text-2xl font-bold">
-            Crear equipo
-          </h2>
-
-          <form onSubmit={crearEquipo} className="space-y-4">
-
-            <div>
-              <label className="mb-1 block font-medium">
-                Nombre del equipo
-              </label>
-
-              <input
-                type="text"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="Ej: Los Pumas"
-                className="w-full rounded border px-3 py-2"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block font-medium">
-                Categoría
-              </label>
-
-              <select
-                value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
-                className="w-full rounded border px-3 py-2"
-              >
-                <option value="">
-                  Seleccionar categoría
-                </option>
-
-                <option value="Sub-15">Sub-15</option>
-                <option value="Sub-17">Sub-17</option>
-                <option value="Sub-20">Sub-20</option>
-                <option value="Primera">Primera</option>
-                <option value="Veteranos">Veteranos</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block font-medium">
-                Localidad
-              </label>
-
-              <input
-                type="text"
-                value={localidad}
-                onChange={(e) => setLocalidad(e.target.value)}
-                placeholder="Ej: Paraná"
-                className="w-full rounded border px-3 py-2"
-              />
-            </div>
-
-            <div className="flex gap-3">
-
-              <button
-                type="submit"
-                className="rounded-lg bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700"
-              >
-                Guardar equipo
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMostrarFormulario(false)}
-                className="rounded-lg bg-gray-400 px-4 py-2 font-semibold text-white hover:bg-gray-500"
-              >
-                Cancelar
-              </button>
-
-            </div>
-
-          </form>
+          <input
+            type="text"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Ej: Los Tigres"
+            required
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
-      )}
 
-      {/* LISTA DE EQUIPOS */}
-      {equipos.length > 0 && (
-        <div className="mt-8">
+        {/* Disciplina */}
+        <div className="mb-5">
+          <label className="block font-semibold mb-2">
+            Disciplina
+          </label>
 
-          <h2 className="mb-4 text-xl font-bold">
-            Equipos creados
-          </h2>
-
-          <div className="space-y-4">
-
-            {equipos.map((equipo) => (
-
-              <div
-                key={equipo.id}
-                className="rounded-lg border p-4 shadow-sm"
-              >
-
-                <h3 className="text-lg font-bold">
-                  {equipo.nombre}
-                </h3>
-
-                <p>
-                  Categoría: {equipo.categoria}
-                </p>
-
-                <p>
-                  Localidad: {equipo.localidad}
-                </p>
-
-                {/* BOTÓN AGREGAR JUGADOR */}
-                <button
-                  onClick={() => abrirFormularioJugador(equipo)}
-                  className="mt-4 rounded-lg bg-purple-600 px-4 py-2 font-semibold text-white hover:bg-purple-700"
-                >
-                  + Agregar jugador
-                </button>
-
-                {/* JUGADORES DEL EQUIPO */}
-                {equipo.jugadores.length > 0 && (
-                  <div className="mt-4">
-
-                    <h4 className="font-semibold">
-                      Jugadores:
-                    </h4>
-
-                    <ul className="mt-2 space-y-2">
-
-                      {equipo.jugadores.map((jugador) => (
-                        <li
-                          key={jugador.id}
-                          className="rounded border p-2"
-                        >
-                          <strong>
-                            {jugador.nombre} {jugador.apellido}
-                          </strong>
-
-                          <span className="ml-2 text-gray-600">
-                            DNI: {jugador.dni}
-                          </span>
-                        </li>
-                      ))}
-
-                    </ul>
-
-                  </div>
-                )}
-
-              </div>
-
-            ))}
-
-          </div>
-        </div>
-      )}
-
-      {/* FORMULARIO AGREGAR JUGADOR */}
-      {mostrarJugador && equipoSeleccionado && (
-
-        <div className="mt-6 max-w-md rounded-lg border p-6 shadow">
-
-          <h2 className="mb-2 text-2xl font-bold">
-            Agregar jugador
-          </h2>
-
-          <p className="mb-4 text-gray-600">
-            Equipo:{" "}
-            <strong>
-              {equipoSeleccionado.nombre}
-            </strong>
-          </p>
-
-          <form
-            onSubmit={agregarJugador}
-            className="space-y-4"
+          <select
+            value={disciplina}
+            onChange={handleDisciplinaChange}
+            required
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
+            <option value="">
+              Seleccioná una disciplina
+            </option>
 
-            <div>
-              <label className="mb-1 block font-medium">
-                Nombre
-              </label>
+            {Object.entries(disciplinas).map(
+              ([clave, disciplina]) => (
+                <option key={clave} value={clave}>
+                  {disciplina.nombre}
+                </option>
+              )
+            )}
+          </select>
+        </div>
 
-              <input
-                type="text"
-                value={nombreJugador}
-                onChange={(e) =>
-                  setNombreJugador(e.target.value)
-                }
-                placeholder="Ej: Lionel"
-                className="w-full rounded border px-3 py-2"
-              />
-            </div>
+        {/* Modalidad */}
+        <div className="mb-5">
+          <label className="block font-semibold mb-2">
+            Modalidad
+          </label>
 
-            <div>
-              <label className="mb-1 block font-medium">
-                Apellido
-              </label>
+          <select
+            value={modalidad}
+            onChange={(e) => setModalidad(e.target.value)}
+            required
+            disabled={!disciplina}
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 disabled:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">
+              {disciplina
+                ? "Seleccioná una modalidad"
+                : "Primero seleccioná una disciplina"}
+            </option>
 
-              <input
-                type="text"
-                value={apellidoJugador}
-                onChange={(e) =>
-                  setApellidoJugador(e.target.value)
-                }
-                placeholder="Ej: Messi"
-                className="w-full rounded border px-3 py-2"
-              />
-            </div>
+            {disciplina &&
+              disciplinas[disciplina].modalidades.map(
+                (modalidad) => (
+                  <option key={modalidad} value={modalidad}>
+                    {modalidad}
+                  </option>
+                )
+              )}
+          </select>
+        </div>
 
-            <div>
-              <label className="mb-1 block font-medium">
-                DNI
-              </label>
+        {/* Categoría */}
+        <div className="mb-5">
+          <label className="block font-semibold mb-2">
+            Categoría
+          </label>
 
-              <input
-                type="text"
-                value={dniJugador}
-                onChange={(e) =>
-                  setDniJugador(e.target.value)
-                }
-                placeholder="Ej: 12345678"
-                className="w-full rounded border px-3 py-2"
-              />
-            </div>
+          <select
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+            required
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">
+              Seleccioná una categoría
+            </option>
 
-            <div className="flex gap-3">
+            {categorias.map((categoria) => (
+              <option key={categoria} value={categoria}>
+                {categoria}
+              </option>
+            ))}
+          </select>
+        </div>
 
-              <button
-                type="submit"
-                className="rounded-lg bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700"
-              >
-                Agregar jugador
-              </button>
+        {/* Localidad */}
+        <div className="mb-5">
+          <label className="block font-semibold mb-2">
+            Localidad
+          </label>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setMostrarJugador(false);
-                  setEquipoSeleccionado(null);
-                }}
-                className="rounded-lg bg-gray-400 px-4 py-2 font-semibold text-white hover:bg-gray-500"
-              >
-                Cancelar
-              </button>
+          <input
+            type="text"
+            value={localidad}
+            onChange={(e) => setLocalidad(e.target.value)}
+            placeholder="Ej: Rosario"
+            required
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
 
-            </div>
+        {/* Capitán */}
+        <div className="mb-6">
+          <label className="block font-semibold mb-2">
+            Capitán
+          </label>
 
-          </form>
+          <input
+            type="text"
+            value={capitan}
+            onChange={(e) => setCapitan(e.target.value)}
+            placeholder="Ej: Juan Pérez"
+            required
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Botones */}
+        <div className="flex gap-3">
+
+          <button
+            type="submit"
+            className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700"
+          >
+            Crear equipo
+          </button>
+
+          <button
+            type="button"
+            className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100"
+          >
+            Cancelar
+          </button>
 
         </div>
 
-      )}
-
+      </form>
     </div>
   );
 }
-
-export default CrearEquipo;
