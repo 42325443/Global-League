@@ -10,7 +10,9 @@ const NAV_ITEMS = [
   { name: 'Equipos', href: '/equipos', icon: 'users' },
   { name: 'Estadísticas', href: '/estadisticas', icon: 'chart' },
   { name: 'Árbitros', href: '/arbitros', icon: 'referees' },
-  { name: 'Calendario', href: '/calendario', icon: 'calendar' }
+  { name: 'Calendario', href: '/calendario', icon: 'calendar' },
+  { name: 'Acta Digital', href: '/actas', icon: 'document' },
+  { name: 'Tabla de Posiciones', href: '/posiciones', icon: 'table' }
 ];
 
 function NavIcon({ name, className = 'w-5 h-5' }) {
