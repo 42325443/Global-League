@@ -1,23 +1,95 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ArbitroWizard from "../components/ArbitroWizard";
+import { apiFetch } from "../lib/api";
+
+const etiquetaDeporte = (nombre = "") => {
+  const normalizado = nombre.trim().toLocaleLowerCase();
+  if (normalizado === "basketball") return "Básquet";
+  if (normalizado === "volleyball") return "Vóley";
+  return nombre;
+};
 
 export default function Arbitros() {
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [arbitros, setArbitros] = useState([]);
+  const [cargandoArbitros, setCargandoArbitros] = useState(true);
+  const [errorArbitros, setErrorArbitros] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [deporteFiltro, setDeporteFiltro] = useState("Todos");
   const [arbitroSeleccionado, setArbitroSeleccionado] = useState(null);
+  const [actualizandoEstado, setActualizandoEstado] = useState(false);
+  const [errorEstado, setErrorEstado] = useState("");
 
   const deportes = ["Todos", "Fútbol", "Básquet", "Vóley"];
 
-  const agregarArbitro = (arbitro) => {
-    const nuevoArbitro = {
-      ...arbitro,
-      estado: "Disponible",
+  useEffect(() => {
+    let cancelado = false;
+
+    const cargarArbitros = async () => {
+      try {
+        const response = await apiFetch("/arbitros");
+        const resultado = await response.json().catch(() => []);
+        if (!response.ok) {
+          throw new Error(resultado.error || "No se pudieron cargar los árbitros.");
+        }
+        if (!Array.isArray(resultado)) {
+          throw new Error("La respuesta de árbitros no es válida.");
+        }
+        if (!cancelado) {
+          setArbitros(resultado);
+          setErrorArbitros("");
+        }
+      } catch (error) {
+        if (!cancelado) {
+          setErrorArbitros(error.message || "No se pudo conectar con el servidor.");
+        }
+      } finally {
+        if (!cancelado) setCargandoArbitros(false);
+      }
     };
 
-    setArbitros((prev) => [...prev, nuevoArbitro]);
-    setIsWizardOpen(false);
+    cargarArbitros();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  const agregarArbitro = (arbitro) => {
+    setArbitros((prev) => [arbitro, ...prev]);
+    setErrorArbitros("");
+  };
+
+  const cambiarEstadoArbitro = async () => {
+    if (!arbitroSeleccionado || actualizandoEstado) return;
+
+    const nuevoEstado = arbitroSeleccionado.estado === "Activo" ? "Inactivo" : "Activo";
+    setActualizandoEstado(true);
+    setErrorEstado("");
+
+    try {
+      const response = await apiFetch(`/arbitros/${arbitroSeleccionado.id}/estado`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado: nuevoEstado })
+      });
+      const resultado = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(resultado.error || "No se pudo actualizar el estado del árbitro.");
+      }
+
+      const actualizarArbitro = (arbitro) =>
+        arbitro.id === resultado.id ? { ...arbitro, estado: resultado.estado } : arbitro;
+
+      setArbitros((prev) => prev.map(actualizarArbitro));
+      setArbitroSeleccionado((prev) =>
+        prev?.id === resultado.id ? { ...prev, estado: resultado.estado } : prev
+      );
+    } catch (error) {
+      setErrorEstado(error.message || "No se pudo actualizar el estado del árbitro.");
+    } finally {
+      setActualizandoEstado(false);
+    }
   };
 
   const arbitrosFiltrados = arbitros.filter((arbitro) => {
@@ -30,7 +102,7 @@ export default function Arbitros() {
 
     const coincideDeporte =
       deporteFiltro === "Todos" ||
-      arbitro.deporte === deporteFiltro;
+      etiquetaDeporte(arbitro.deporte) === deporteFiltro;
 
     return coincideBusqueda && coincideDeporte;
   });
@@ -76,12 +148,12 @@ export default function Arbitros() {
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
           <p className="text-sm text-slate-500 font-medium">
-            Disponibles
+            Activos
           </p>
 
           <p className="text-3xl font-bold text-emerald-600 mt-1">
             {arbitros.filter(
-              (arbitro) => arbitro.estado === "Disponible"
+              (arbitro) => arbitro.estado === "Activo"
             ).length}
           </p>
         </div>
@@ -92,7 +164,7 @@ export default function Arbitros() {
           </p>
 
           <p className="text-3xl font-bold text-blue-600 mt-1">
-            {new Set(arbitros.map((arbitro) => arbitro.deporte)).size}
+            {new Set(arbitros.map((arbitro) => etiquetaDeporte(arbitro.deporte)).filter(Boolean)).size}
           </p>
         </div>
 
@@ -141,7 +213,17 @@ export default function Arbitros() {
       </div>
 
       {/* LISTADO */}
-      {arbitrosFiltrados.length === 0 ? (
+      {errorArbitros && (
+        <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errorArbitros}
+        </p>
+      )}
+
+      {cargandoArbitros ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center text-sm text-slate-500">
+          Cargando árbitros...
+        </div>
+      ) : arbitrosFiltrados.length === 0 ? (
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center">
 
@@ -213,7 +295,11 @@ export default function Arbitros() {
 
                 </div>
 
-                <span className="text-xs font-bold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                  arbitro.estado === "Activo"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-slate-100 text-slate-600"
+                }`}>
                   {arbitro.estado}
                 </span>
 
@@ -228,7 +314,7 @@ export default function Arbitros() {
                   </span>
 
                   <span className="font-semibold text-slate-700">
-                    {arbitro.deporte}
+                    {etiquetaDeporte(arbitro.deporte)}
                   </span>
                 </div>
 
@@ -325,7 +411,7 @@ export default function Arbitros() {
                   </h2>
 
                   <p className="text-sm text-slate-500">
-                    Árbitro de {arbitroSeleccionado.deporte}
+                    Árbitro de {etiquetaDeporte(arbitroSeleccionado.deporte)}
                   </p>
                 </div>
 
@@ -342,7 +428,11 @@ export default function Arbitros() {
 
             {/* ESTADO */}
             <div className="mb-5">
-              <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700">
+              <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${
+                arbitroSeleccionado.estado === "Activo"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-slate-100 text-slate-600"
+              }`}>
                 ● {arbitroSeleccionado.estado}
               </span>
             </div>
@@ -396,7 +486,7 @@ export default function Arbitros() {
                 </span>
 
                 <span className="text-sm font-semibold text-slate-700">
-                  {arbitroSeleccionado.deporte}
+                  {etiquetaDeporte(arbitroSeleccionado.deporte)}
                 </span>
               </div>
 
@@ -412,13 +502,39 @@ export default function Arbitros() {
 
             </div>
 
-            {/* CERRAR */}
-            <button
-              onClick={() => setArbitroSeleccionado(null)}
-              className="w-full mt-6 bg-slate-800 hover:bg-slate-900 text-white py-2.5 rounded-lg font-semibold text-sm"
-            >
-              Cerrar
-            </button>
+            {errorEstado && (
+              <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {errorEstado}
+              </p>
+            )}
+
+            {/* ACCIONES */}
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                onClick={() => {
+                  setArbitroSeleccionado(null);
+                  setErrorEstado("");
+                }}
+                className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={cambiarEstadoArbitro}
+                disabled={actualizandoEstado}
+                className={`rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-wait disabled:opacity-60 ${
+                  arbitroSeleccionado.estado === "Activo"
+                    ? "bg-rose-600 hover:bg-rose-700"
+                    : "bg-emerald-600 hover:bg-emerald-700"
+                }`}
+              >
+                {actualizandoEstado
+                  ? "Actualizando..."
+                  : arbitroSeleccionado.estado === "Activo"
+                    ? "Desactivar árbitro"
+                    : "Reactivar árbitro"}
+              </button>
+            </div>
 
           </div>
 

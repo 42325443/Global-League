@@ -1,7 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { apiFetch } from "../lib/api";
 
 export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
   const [paso, setPaso] = useState(1);
+  const [deportes, setDeportes] = useState([]);
+  const [disciplinas, setDisciplinas] = useState([]);
+  const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
+  const [errorCatalogo, setErrorCatalogo] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [errorGuardado, setErrorGuardado] = useState("");
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -10,38 +17,76 @@ export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
     email: "",
     telefono: "",
     localidad: "",
+    idDeporte: "",
+    idDisciplina: "",
     deporte: "",
     especialidad: "",
   });
 
-  const deportes = [
-    {
-      id: 1,
-      nombre: "Fútbol",
-      especialidades: [
-        "Fútbol 5",
-        "Fútbol 7",
-        "Fútbol 9",
-        "Fútbol 11",
-      ],
-    },
-    {
-      id: 2,
-      nombre: "Básquet",
-      especialidades: [
-        "Básquet 5v5",
-        "Básquet 3x3",
-      ],
-    },
-    {
-      id: 3,
-      nombre: "Vóley",
-      especialidades: [
-        "Vóley 6v6",
-        "Vóley Playa 2v2",
-      ],
-    },
-  ];
+  useEffect(() => {
+    let cancelado = false;
+
+    const cargarCatalogos = async () => {
+      try {
+        const [respuestaDeportes, respuestaDisciplinas] = await Promise.all([
+          apiFetch("/catalogos/deportes"),
+          apiFetch("/catalogos/disciplinas"),
+        ]);
+
+        if (!respuestaDeportes.ok || !respuestaDisciplinas.ok) {
+          throw new Error("No se pudieron cargar los deportes y disciplinas.");
+        }
+
+        const [deportesData, disciplinasData] = await Promise.all([
+          respuestaDeportes.json(),
+          respuestaDisciplinas.json(),
+        ]);
+
+        if (!Array.isArray(deportesData) || !Array.isArray(disciplinasData)) {
+          throw new Error("La respuesta del catálogo no es válida.");
+        }
+
+        const deportesNormalizados = deportesData.map((deporte) => {
+          const nombre = deporte.nombreDeporte ?? deporte.nombre_deporte ?? deporte.nombre ?? "";
+          const nombreNormalizado = nombre.trim().toLocaleLowerCase();
+          const etiqueta = nombreNormalizado === "basketball"
+            ? "Básquet"
+            : nombreNormalizado === "volleyball"
+              ? "Vóley"
+              : nombre;
+
+          return {
+            id: deporte.idDeporte ?? deporte.id_deporte ?? deporte.id,
+            nombre,
+            etiqueta,
+          };
+        }).filter((deporte) => deporte.id && deporte.nombre);
+
+        const disciplinasNormalizadas = disciplinasData.map((disciplina) => ({
+          id: disciplina.idDisciplina ?? disciplina.id_disciplina ?? disciplina.id,
+          idDeporte: disciplina.idDeporte ?? disciplina.id_deporte,
+          nombre: disciplina.nombreDisciplina ?? disciplina.nombre_disciplina ?? disciplina.nombre ?? "",
+        })).filter((disciplina) => disciplina.id && disciplina.idDeporte && disciplina.nombre);
+
+        if (!cancelado) {
+          setDeportes(deportesNormalizados);
+          setDisciplinas(disciplinasNormalizadas);
+          setErrorCatalogo("");
+        }
+      } catch (error) {
+        if (!cancelado) {
+          setErrorCatalogo(error.message || "No se pudieron cargar las disciplinas.");
+        }
+      } finally {
+        if (!cancelado) setCargandoCatalogo(false);
+      }
+    };
+
+    cargarCatalogos();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -55,17 +100,22 @@ export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
   const seleccionarDeporte = (deporte) => {
     setFormData((prev) => ({
       ...prev,
-      deporte: deporte.nombre,
+      idDeporte: String(deporte.id),
+      idDisciplina: "",
+      deporte: deporte.etiqueta,
       especialidad: "",
     }));
   };
 
   const deporteSeleccionado = deportes.find(
-    (deporte) => deporte.nombre === formData.deporte
+    (deporte) => String(deporte.id) === String(formData.idDeporte)
+  );
+  const especialidades = disciplinas.filter(
+    (disciplina) => String(disciplina.idDeporte) === String(formData.idDeporte)
   );
 
   const puedeAvanzarPaso1 =
-    formData.deporte && formData.especialidad;
+    formData.idDeporte && formData.idDisciplina;
 
   const puedeAvanzarPaso2 =
     formData.nombre &&
@@ -75,36 +125,46 @@ export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
     formData.telefono;
 
   const puedeFinalizar =
-    formData.nombre &&
-    formData.apellido &&
-    formData.dni &&
-    formData.email &&
-    formData.telefono &&
-    formData.localidad &&
-    formData.deporte &&
-    formData.especialidad;
+    formData.nombre.trim() &&
+    formData.apellido.trim() &&
+    formData.dni.trim() &&
+    formData.email.trim() &&
+    formData.telefono.trim() &&
+    formData.localidad.trim() &&
+    formData.idDisciplina;
 
-  const handleFinalizar = (e) => {
+  const handleFinalizar = async (e) => {
     e.preventDefault();
+    if (guardando) return;
 
-    const arbitroNuevo = {
-      id: Date.now(),
-      nombre: formData.nombre,
-      apellido: formData.apellido,
-      dni: formData.dni,
-      email: formData.email,
-      telefono: formData.telefono,
-      localidad: formData.localidad,
-      deporte: formData.deporte,
-      especialidad: formData.especialidad,
-    };
+    setGuardando(true);
+    setErrorGuardado("");
+    try {
+      const response = await apiFetch("/arbitros", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: formData.nombre.trim(),
+          apellido: formData.apellido.trim(),
+          dni: formData.dni.trim(),
+          email: formData.email.trim(),
+          telefono: formData.telefono.trim(),
+          localidad: formData.localidad.trim(),
+          idDisciplina: Number(formData.idDisciplina),
+        }),
+      });
 
-    if (onArbitroCreado) {
-      onArbitroCreado(arbitroNuevo);
-    }
+      const resultado = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(resultado.error || "No se pudo guardar el árbitro.");
+      }
 
-    if (onVolver) {
-      onVolver();
+      onArbitroCreado?.(resultado);
+      onVolver?.();
+    } catch (error) {
+      setErrorGuardado(error.message || "No se pudo conectar con el servidor.");
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -157,18 +217,26 @@ export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
       {paso === 1 && (
         <div className="space-y-6">
 
+          {errorCatalogo && (
+            <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {errorCatalogo}
+            </p>
+          )}
+
           <div>
 
             <h3 className="text-lg font-semibold text-slate-200 mb-3">
               1. Selecciona el Deporte
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-
-              {deportes.map((deporte) => {
+            {cargandoCatalogo ? (
+              <p className="text-sm text-slate-400">Cargando deportes y disciplinas...</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {deportes.map((deporte) => {
 
                 const seleccionado =
-                  formData.deporte === deporte.nombre;
+                  String(formData.idDeporte) === String(deporte.id);
 
                 return (
                   <button
@@ -183,12 +251,12 @@ export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
                         : "border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700 hover:text-slate-200"
                     }`}
                   >
-                    {deporte.nombre}
+                    {deporte.etiqueta}
                   </button>
                 );
-              })}
-
-            </div>
+                })}
+              </div>
+            )}
 
           </div>
 
@@ -201,24 +269,24 @@ export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
                 2. Selecciona la Especialidad
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
-                {deporteSeleccionado?.especialidades.map(
-                  (especialidad) => {
+              {especialidades.length === 0 ? (
+                <p className="text-sm text-slate-400">No hay disciplinas cargadas para este deporte.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {especialidades.map((especialidad) => {
 
                     const seleccionado =
-                      formData.especialidad === especialidad;
+                      String(formData.idDisciplina) === String(especialidad.id);
 
                     return (
                       <button
-                        key={especialidad}
+                        key={especialidad.id}
                         type="button"
-                        onClick={() =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            especialidad,
-                          }))
-                        }
+                        onClick={() => setFormData((prev) => ({
+                          ...prev,
+                          idDisciplina: String(especialidad.id),
+                          especialidad: especialidad.nombre,
+                        }))}
                         className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                           seleccionado
                             ? "border-blue-500 bg-blue-500/10 text-white font-bold"
@@ -226,14 +294,13 @@ export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
                         }`}
                       >
                         <span className="block text-sm font-semibold">
-                          {especialidad}
+                          {especialidad.nombre}
                         </span>
                       </button>
                     );
-                  }
-                )}
-
-              </div>
+                  })}
+                </div>
+              )}
 
             </div>
           )}
@@ -354,6 +421,12 @@ export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
 
       {paso === 3 && (
         <div className="space-y-5">
+
+          {errorGuardado && (
+            <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {errorGuardado}
+            </p>
+          )}
 
           <h3 className="text-lg font-semibold text-slate-200">
             Información y Confirmación
@@ -484,10 +557,10 @@ export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
           <button
             type="button"
             onClick={handleFinalizar}
-            disabled={!puedeFinalizar}
+            disabled={!puedeFinalizar || guardando}
             className="px-5 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
-            Guardar y Registrar Árbitro
+            {guardando ? "Guardando árbitro..." : "Guardar y Registrar Árbitro"}
           </button>
 
         )}
