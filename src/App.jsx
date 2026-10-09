@@ -11,6 +11,8 @@ import Estadisticas from './views/Estadisticas';
 import Arbitros from './views/Arbitros';
 import CrearArbitro from './views/CrearArbitro';
 import Calendario from './views/Calendario';
+import ActaDigitalPartido from './views/ActaDigitalPartido';
+import TablaPosiciones from './views/TablaPosiciones';
 import Login from './views/Login';
 import Registro from './views/Registro';
 
@@ -46,8 +48,8 @@ function RutasAplicacion() {
           <Route path="/arbitros" element={<Arbitros />} />
           <Route path="/crear-arbitro" element={<CrearArbitro />} />
           <Route path="/calendario" element={<Calendario />} />
-          <Route path="/actas" element={<Navigate to="/arbitros" replace />} />
-          <Route path="/posiciones" element={<Navigate to="/estadisticas" replace />} />
+          <Route path="/actas" element={<ActaDigitalPartido />} />
+          <Route path="/posiciones" element={<TablaPosiciones />} />
           <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Routes>
       </main>

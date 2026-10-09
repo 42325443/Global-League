@@ -1,436 +1,313 @@
-import { useState } from 'react';
-import { 
-  ArrowLeft, 
-  Save, 
-  CheckCircle2, 
-  Plus, 
-  Trash2, 
-  UserCheck, 
-  AlertTriangle, 
-  FileText, 
-  Clock, 
-  Edit3, 
-  ShieldCheck,
-  Check
-} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ArrowPathIcon,
+  CalendarDaysIcon,
+  ClockIcon,
+  DocumentTextIcon,
+  MagnifyingGlassIcon,
+  MapPinIcon,
+} from '@heroicons/react/24/outline';
+import ActaPartidoForm from '../components/ActaPartidoForm';
+import { apiFetch } from '../lib/api';
+
+const leerRespuesta = async (response, mensajePredeterminado) => {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || mensajePredeterminado);
+  return data;
+};
+
+const convertirFecha = (valor) => {
+  if (!valor) return null;
+  const fecha = new Date(String(valor).replace(' ', 'T'));
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
+};
+
+const formatearFecha = (valor) => {
+  const fecha = convertirFecha(valor);
+  if (!fecha) return 'Fecha pendiente';
+  return new Intl.DateTimeFormat('es-AR', {
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+  }).format(fecha);
+};
+
+const formatearHorario = (partido) => {
+  const inicio = convertirFecha(partido.fechaHoraInicio);
+  if (!inicio) return 'Horario pendiente';
+  const formatoHora = new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' });
+  const horaInicio = formatoHora.format(inicio);
+  const fin = convertirFecha(partido.fechaHoraFin);
+  return fin ? horaInicio + '–' + formatoHora.format(fin) : horaInicio;
+};
+
+const obtenerIdArbitroActa = (partido) => {
+  if (partido.idArbitroActa) return Number(partido.idArbitroActa);
+  const arbitrosAsignados = String(partido.idsArbitros || '').split(',').filter(Boolean);
+  return arbitrosAsignados.length ? Number(arbitrosAsignados[0]) : null;
+};
+
+const estaResueltoSinActa = (partido) => (
+  ['Anulado', 'Pase libre'].includes(partido.estado)
+  || (partido.estado === 'Finalizado' && partido.estadoActa !== 'Cerrada')
+);
+
+const puedeAbrirActa = (partido) => (
+  Boolean(partido.idEquipoLocal && partido.idEquipoVisitante)
+  && !estaResueltoSinActa(partido)
+);
+
+const obtenerEstadoActa = (partido) => {
+  if (partido.estadoActa === 'Cerrada') return 'Acta cerrada';
+  if (partido.estadoActa === 'Borrador') return 'Borrador';
+  if (estaResueltoSinActa(partido)) return partido.estado || 'Resuelto';
+  if (!partido.idEquipoLocal || !partido.idEquipoVisitante) return 'Esperando equipos';
+  return partido.estado || 'Pendiente';
+};
 
 export default function ActaDigitalPartido() {
-  // Estado del Partido y Metadatos del Acta
-  const [partido, setPartido] = useState({
-    id: 'PAR-2025-042',
-    torneo: 'Liga Global 2025',
-    jornada: 'Jornada 5',
-    fechaHora: '15/06/2025 - 18:00 Hs',
-    cancha: 'Cancha 1 - Sede Central',
-    arbitroPrincipal: 'Carlos Gómez',
-    equipoLocal: { id: 'EQ-1', nombre: 'Tigres FC' },
-    equipoVisitante: { id: 'EQ-2', nombre: 'Leones FC' },
-    golesLocal: 2,
-    golesVisitante: 1,
-    estadoActa: 'borrador' // 'borrador' | 'firmada' | 'cerrada'
-  });
+  const [partidos, setPartidos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [actualizando, setActualizando] = useState(false);
+  const [error, setError] = useState('');
+  const [filtroTorneo, setFiltroTorneo] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('todos');
+  const [busqueda, setBusqueda] = useState('');
+  const [partidoSeleccionado, setPartidoSeleccionado] = useState(null);
 
-  // Plantillas de Jugadores Mock
-  const [plantillaLocal] = useState([
-    { id: 'J-101', dorsal: 1, nombre: 'Juan Pérez', posicion: 'POR', convocado: true },
-    { id: 'J-102', dorsal: 4, nombre: 'Mateo Rossi', posicion: 'DEF', convocado: true },
-    { id: 'J-103', dorsal: 8, nombre: 'Lucas Silva', posicion: 'MED', convocado: true },
-    { id: 'J-104', dorsal: 10, nombre: 'Diego Fernández', posicion: 'DEL', convocado: true },
-    { id: 'J-105', dorsal: 9, nombre: 'Nicolás Martínez', posicion: 'DEL', convocado: true },
-  ]);
-
-  const [plantillaVisitante] = useState([
-    { id: 'J-201', dorsal: 12, nombre: 'Santiago López', posicion: 'POR', convocado: true },
-    { id: 'J-202', dorsal: 3, nombre: 'Tomás Benítez', posicion: 'DEF', convocado: true },
-    { id: 'J-203', dorsal: 5, nombre: 'Javier Acosta', posicion: 'MED', convocado: true },
-    { id: 'J-204', dorsal: 7, nombre: 'Ezequiel Romero', posicion: 'DEL', convocado: true },
-    { id: 'J-205', dorsal: 11, nombre: 'Agustín Castro', posicion: 'DEL', convocado: true },
-  ]);
-
-  // Lista de Incidencias / Eventos registrados
-  const [incidencias, setIncidencias] = useState([
-    { id: 1, minuto: '14', equipo: 'Tigres FC', tipo: 'Gol', jugador: 'Diego Fernández (#10)', detalle: 'Jugada de campo' },
-    { id: 2, minuto: '32', equipo: 'Leones FC', tipo: 'Tarjeta Amarilla', jugador: 'Tomás Benítez (#3)', detalle: 'Falta táctica' },
-    { id: 3, minuto: '58', equipo: 'Tigres FC', tipo: 'Gol', jugador: 'Nicolás Martínez (#9)', detalle: 'Cabeza' },
-    { id: 4, minuto: '75', equipo: 'Leones FC', tipo: 'Gol', jugador: 'Ezequiel Romero (#7)', detalle: 'Penal' },
-  ]);
-
-  // Formulario para registrar nueva incidencia
-  const [nuevaIncidencia, setNuevaIncidencia] = useState({
-    minuto: '',
-    equipo: 'Tigres FC',
-    tipo: 'Gol',
-    jugador: '',
-    detalle: ''
-  });
-
-  const [observaciones, setObservaciones] = useState('');
-  const [firmaArbitro, setFirmaArbitro] = useState(false);
-
-  // Handlers
-  const handleAgregarIncidencia = (e) => {
-    e.preventDefault();
-    if (!nuevaIncidencia.minuto || !nuevaIncidencia.jugador) return;
-
-    const item = {
-      id: Date.now(),
-      ...nuevaIncidencia
-    };
-
-    setIncidencias([...incidencias, item]);
-    setNuevaIncidencia({ minuto: '', equipo: 'Tigres FC', tipo: 'Gol', jugador: '', detalle: '' });
-  };
-
-  const handleEliminarIncidencia = (id) => {
-    setIncidencias(incidencias.filter(inc => inc.id !== id));
-  };
-
-  const handleCerrarActa = () => {
-    if (!firmaArbitro) {
-      alert('Debe incluir la firma/conformidad del árbitro antes de cerrar el acta.');
-      return;
+  const cargarPartidos = useCallback(async (manual = false) => {
+    if (manual) setActualizando(true);
+    else setCargando(true);
+    setError('');
+    try {
+      const data = await leerRespuesta(
+        await apiFetch('/calendario'),
+        'No se pudieron cargar los partidos.'
+      );
+      setPartidos(Array.isArray(data) ? data : []);
+    } catch (cargaError) {
+      setError(cargaError.message || 'No se pudieron cargar los partidos.');
+    } finally {
+      setCargando(false);
+      setActualizando(false);
     }
-    setPartido({ ...partido, estadoActa: 'cerrada' });
-  };
+  }, []);
+
+  useEffect(() => {
+    let activo = true;
+    apiFetch('/calendario')
+      .then((response) => leerRespuesta(response, 'No se pudieron cargar los partidos.'))
+      .then((data) => {
+        if (activo) setPartidos(Array.isArray(data) ? data : []);
+      })
+      .catch((cargaError) => {
+        if (activo) setError(cargaError.message || 'No se pudieron cargar los partidos.');
+      })
+      .finally(() => {
+        if (activo) setCargando(false);
+      });
+    return () => { activo = false; };
+  }, []);
+
+  const torneos = useMemo(() => {
+    const opciones = new Map();
+    partidos.forEach((partido) => opciones.set(String(partido.idTorneo), partido.nombreTorneo));
+    return [...opciones.entries()].map(([id, nombre]) => ({ id, nombre }));
+  }, [partidos]);
+
+  const partidosFiltrados = useMemo(() => {
+    const texto = busqueda.trim().toLocaleLowerCase();
+    return partidos.filter((partido) => {
+      if (filtroTorneo && String(partido.idTorneo) !== filtroTorneo) return false;
+      if (filtroEstado === 'pendientes' && (partido.estadoActa === 'Cerrada' || estaResueltoSinActa(partido))) return false;
+      if (filtroEstado === 'cerradas' && partido.estadoActa !== 'Cerrada') return false;
+      if (!texto) return true;
+      return [
+        partido.nombreTorneo,
+        partido.equipoLocal,
+        partido.equipoVisitante,
+        partido.nombreRonda,
+        partido.nombresArbitros,
+      ].some((valor) => String(valor || '').toLocaleLowerCase().includes(texto));
+    });
+  }, [partidos, filtroTorneo, filtroEstado, busqueda]);
+
+  const actasCerradas = partidos.filter((partido) => partido.estadoActa === 'Cerrada').length;
+  const actasPendientes = partidos.filter((partido) => (
+    puedeAbrirActa(partido) && partido.estadoActa !== 'Cerrada'
+  )).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 p-4 md:p-6 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* Barra superior de navegación y acciones */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <button className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            Volver a Partidos
-          </button>
-
-          <div className="flex items-center gap-3">
-            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-              partido.estadoActa === 'cerrada' 
-                ? 'bg-green-100 text-green-800 border border-green-200' 
-                : 'bg-amber-100 text-amber-800 border border-amber-200'
-            }`}>
-              {partido.estadoActa === 'cerrada' ? 'Acta Confirmada & Cerrada' : 'Borrador en Edición'}
-            </span>
-
-            {partido.estadoActa !== 'cerrada' && (
-              <>
-                <button 
-                  onClick={() => alert('Borrador guardado correctamente.')}
-                  className="flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
-                >
-                  <Save className="w-4 h-4 text-gray-500" />
-                  Guardar Borrador
-                </button>
-
-                <button 
-                  onClick={handleCerrarActa}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  Firmar y Finalizar Acta
-                </button>
-              </>
-            )}
-          </div>
+    <div className="mx-auto flex h-full min-h-0 max-w-6xl flex-col gap-5">
+      <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-lime-50/70 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div>
+          <span className="text-xs font-extrabold uppercase tracking-[0.16em] text-lime-700">Registro de encuentros</span>
+          <h1 className="mt-1 text-2xl font-black text-slate-900">Acta Digital</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            Elegí un partido para cargar o consultar su acta. El torneo se actualiza al cerrar el acta.
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={() => cargarPartidos(true)}
+          disabled={actualizando || cargando}
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+        >
+          <ArrowPathIcon className={actualizando ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+          {actualizando ? 'Actualizando…' : 'Actualizar partidos'}
+        </button>
+      </header>
 
-        {/* Marcador Principal y Cabecera del Partido */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="bg-gray-900 text-white p-4 px-6 flex flex-wrap justify-between items-center gap-2 text-xs font-medium">
-            <span className="flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-blue-400" /> {partido.torneo} — {partido.jornada}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-amber-400" /> {partido.fechaHora} | {partido.cancha}
-            </span>
-            <span>Árbitro: <strong>{partido.arbitroPrincipal}</strong></span>
-          </div>
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <article className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500">Partidos visibles</p>
+          <p className="mt-1 text-2xl font-black text-slate-900">{partidos.length}</p>
+        </article>
+        <article className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold text-amber-800">Actas pendientes</p>
+          <p className="mt-1 text-2xl font-black text-amber-900">{actasPendientes}</p>
+        </article>
+        <article className="col-span-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 shadow-sm sm:col-span-1">
+          <p className="text-xs font-semibold text-emerald-800">Actas cerradas</p>
+          <p className="mt-1 text-2xl font-black text-emerald-900">{actasCerradas}</p>
+        </article>
+      </section>
 
-          <div className="p-6 grid grid-cols-3 items-center text-center">
-            {/* Equipo Local */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 font-bold text-2xl flex items-center justify-center border-2 border-blue-200">
-                T
-              </div>
-              <h2 className="text-xl font-bold text-gray-900">{partido.equipoLocal.nombre}</h2>
-              <span className="text-xs text-gray-500 uppercase font-semibold">Local</span>
-            </div>
-
-            {/* Resultado */}
-            <div className="flex flex-col items-center justify-center">
-              <div className="flex items-center gap-4 text-4xl sm:text-5xl font-extrabold text-gray-900">
-                <input 
-                  type="number" 
-                  min="0"
-                  value={partido.golesLocal}
-                  disabled={partido.estadoActa === 'cerrada'}
-                  onChange={(e) => setPartido({...partido, golesLocal: parseInt(e.target.value) || 0})}
-                  className="w-16 text-center border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none p-1"
-                />
-                <span className="text-gray-400">:</span>
-                <input 
-                  type="number" 
-                  min="0"
-                  value={partido.golesVisitante}
-                  disabled={partido.estadoActa === 'cerrada'}
-                  onChange={(e) => setPartido({...partido, golesVisitante: parseInt(e.target.value) || 0})}
-                  className="w-16 text-center border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none p-1"
-                />
-              </div>
-              <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md mt-3 border border-emerald-200">
-                Resultado Oficial
-              </span>
-            </div>
-
-            {/* Equipo Visitante */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-700 font-bold text-2xl flex items-center justify-center border-2 border-amber-200">
-                L
-              </div>
-              <h2 className="text-xl font-bold text-gray-900">{partido.equipoVisitante.nombre}</h2>
-              <span className="text-xs text-gray-500 uppercase font-semibold">Visitante</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Grid Principal: Módulo de Registro y Eventos */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Columna Izquierda / Central: Carga de Incidencias & Timeline */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* Formulario de Registro de Eventos (Solo en estado Borrador) */}
-            {partido.estadoActa !== 'cerrada' && (
-              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-                <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-3">
-                  <Plus className="w-4 h-4 text-blue-600" />
-                  Registrar Incidencia / Evento
-                </h3>
-
-                <form onSubmit={handleAgregarIncidencia} className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Minuto</label>
-                    <input 
-                      type="number" 
-                      placeholder="Ej: 45"
-                      value={nuevaIncidencia.minuto}
-                      onChange={(e) => setNuevaIncidencia({...nuevaIncidencia, minuto: e.target.value})}
-                      className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      required
-                    />
-                  </div>
-
-                  <div className="sm:col-span-3">
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Equipo</label>
-                    <select 
-                      value={nuevaIncidencia.equipo}
-                      onChange={(e) => setNuevaIncidencia({...nuevaIncidencia, equipo: e.target.value})}
-                      className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
-                    >
-                      <option value="Tigres FC">Tigres FC</option>
-                      <option value="Leones FC">Leones FC</option>
-                    </select>
-                  </div>
-
-                  <div className="sm:col-span-3">
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo Evento</label>
-                    <select 
-                      value={nuevaIncidencia.tipo}
-                      onChange={(e) => setNuevaIncidencia({...nuevaIncidencia, tipo: e.target.value})}
-                      className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
-                    >
-                      <option value="Gol">Gol</option>
-                      <option value="Tarjeta Amarilla">Tarjeta Amarilla</option>
-                      <option value="Tarjeta Roja">Tarjeta Roja</option>
-                      <option value="Cambio">Sustitución</option>
-                    </select>
-                  </div>
-
-                  <div className="sm:col-span-4">
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Jugador</label>
-                    <input 
-                      type="text" 
-                      placeholder="Nombre o N° Dorsal"
-                      value={nuevaIncidencia.jugador}
-                      onChange={(e) => setNuevaIncidencia({...nuevaIncidencia, jugador: e.target.value})}
-                      className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      required
-                    />
-                  </div>
-
-                  <div className="sm:col-span-10">
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Detalle / Observación corta</label>
-                    <input 
-                      type="text" 
-                      placeholder="Ej: Tiro libre / Falta antideportiva"
-                      value={nuevaIncidencia.detalle}
-                      onChange={(e) => setNuevaIncidencia({...nuevaIncidencia, detalle: e.target.value})}
-                      className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2 flex items-end">
-                    <button 
-                      type="submit"
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold p-2 rounded-lg transition-colors flex items-center justify-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" /> Añadir
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {/* Timeline / Cronograma de Incidencias */}
-            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-              <h3 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3">
-                Cronograma de Incidencias Registradas
-              </h3>
-
-              {incidencias.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-6">No se han registrado incidencias en el acta.</p>
-              ) : (
-                <div className="divide-y divide-gray-100">
-                  {incidencias.sort((a,b) => parseInt(a.minuto) - parseInt(b.minuto)).map((inc) => (
-                    <div key={inc.id} className="py-3 flex items-center justify-between text-sm hover:bg-gray-50 px-2 rounded-lg transition-colors">
-                      <div className="flex items-center gap-3">
-                        <span className="w-9 h-9 rounded-full bg-gray-100 border border-gray-200 text-gray-800 font-bold text-xs flex items-center justify-center">
-                          {inc.minuto}'
-                        </span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-gray-900">{inc.equipo}</span>
-                            <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
-                              inc.tipo === 'Gol' ? 'bg-emerald-100 text-emerald-800' :
-                              inc.tipo === 'Tarjeta Amarilla' ? 'bg-amber-100 text-amber-800' :
-                              inc.tipo === 'Tarjeta Roja' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
-                            }`}>
-                              {inc.tipo}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-600 mt-0.5">
-                            <strong>{inc.jugador}</strong> {inc.detalle ? `— ${inc.detalle}` : ''}
-                          </p>
-                        </div>
-                      </div>
-
-                      {partido.estadoActa !== 'cerrada' && (
-                        <button 
-                          onClick={() => handleEliminarIncidencia(inc.id)}
-                          className="text-gray-400 hover:text-red-600 p-1 rounded transition-colors"
-                          title="Eliminar evento"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Planillas / Alineaciones de Equipos */}
-            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-              <h3 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-blue-600" />
-                Alineaciones y Control de Jugadores
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Tabla Tigres FC */}
-                <div>
-                  <h4 className="font-bold text-sm text-gray-800 mb-2 border-b pb-1">Tigres FC (Local)</h4>
-                  <ul className="space-y-1 text-xs">
-                    {plantillaLocal.map(j => (
-                      <li key={j.id} className="flex justify-between items-center p-1.5 bg-gray-50 rounded">
-                        <span><strong>#{j.dorsal}</strong> {j.nombre} ({j.posicion})</span>
-                        <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Presente
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Tabla Leones FC */}
-                <div>
-                  <h4 className="font-bold text-sm text-gray-800 mb-2 border-b pb-1">Leones FC (Visitante)</h4>
-                  <ul className="space-y-1 text-xs">
-                    {plantillaVisitante.map(j => (
-                      <li key={j.id} className="flex justify-between items-center p-1.5 bg-gray-50 rounded">
-                        <span><strong>#{j.dorsal}</strong> {j.nombre} ({j.posicion})</span>
-                        <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Presente
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Columna Derecha: Observaciones & Firma del Árbitro */}
-          <div className="space-y-6">
-            
-            {/* Informe de Observaciones */}
-            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-              <h3 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-blue-600" />
-                Observaciones del Árbitro
-              </h3>
-
-              <textarea 
-                rows="5"
-                placeholder="Escriba comentarios, conductas antideportivas, reclamos de delegados o novedades del encuentro..."
-                value={observaciones}
-                disabled={partido.estadoActa === 'cerrada'}
-                onChange={(e) => setObservaciones(e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-gray-50 text-gray-800"
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 p-4 sm:p-5">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+            <label className="relative block">
+              <span className="sr-only">Buscar partido</span>
+              <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={busqueda}
+                onChange={(event) => setBusqueda(event.target.value)}
+                placeholder="Buscar equipo, torneo o árbitro…"
+                className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-lime-500 focus:ring-2 focus:ring-lime-100"
               />
-            </div>
-
-            {/* Conformidad y Firma Digital */}
-            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-              <h3 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                Cierre y Conformidad Digital
-              </h3>
-
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-xs text-amber-800">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-                <p>Una vez cerrada el acta, la información impactará directamente en la tabla de posiciones y estadísticas de goleadores/sanciones.</p>
-              </div>
-
-              <div className="pt-2">
-                <label className="flex items-start gap-2 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={firmaArbitro}
-                    disabled={partido.estadoActa === 'cerrada'}
-                    onChange={(e) => setFirmaArbitro(e.target.checked)}
-                    className="mt-1 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                  />
-                  <span className="text-xs text-gray-700 leading-tight">
-                    Doy fe de la exactitud de los datos volcados en esta acta digital como Árbitro Principal del encuentro (<strong>{partido.arbitroPrincipal}</strong>).
-                  </span>
-                </label>
-              </div>
-
-              {partido.estadoActa === 'cerrada' && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-900 text-xs text-center font-bold">
-                  ✓ Acta firmada digitalmente el {new Date().toLocaleDateString()}
-                </div>
-              )}
-            </div>
-
+            </label>
+            <label>
+              <span className="sr-only">Filtrar por torneo</span>
+              <select
+                value={filtroTorneo}
+                onChange={(event) => setFiltroTorneo(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-lime-500 focus:ring-2 focus:ring-lime-100"
+              >
+                <option value="">Todos los torneos</option>
+                {torneos.map((torneo) => <option key={torneo.id} value={torneo.id}>{torneo.nombre}</option>)}
+              </select>
+            </label>
           </div>
-
+          <div className="mt-3 flex flex-wrap gap-2" aria-label="Filtrar actas por estado">
+            {[
+              ['todos', 'Todos'],
+              ['pendientes', 'Pendientes'],
+              ['cerradas', 'Cerradas'],
+            ].map(([valor, etiqueta]) => (
+              <button
+                key={valor}
+                type="button"
+                onClick={() => setFiltroEstado(valor)}
+                className={filtroEstado === valor
+                  ? 'rounded-full bg-slate-900 px-3 py-1.5 text-xs font-bold text-white'
+                  : 'rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200'}
+              >
+                {etiqueta}
+              </button>
+            ))}
+          </div>
         </div>
 
-      </div>
+        {error && <p role="alert" className="m-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+          {cargando ? (
+            <p className="py-12 text-center text-sm font-medium text-slate-500">Cargando partidos…</p>
+          ) : partidosFiltrados.length ? (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {partidosFiltrados.map((partido) => {
+                const disponible = puedeAbrirActa(partido);
+                const cerrada = partido.estadoActa === 'Cerrada';
+                const equipoLocal = partido.equipoLocal || 'Equipo por definir';
+                const equipoVisitante = partido.equipoVisitante || (partido.estado === 'Pase libre' ? 'Pase libre' : 'Equipo por definir');
+                return (
+                  <article key={partido.idPartido} className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-sm sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold uppercase tracking-wide text-lime-700">{partido.nombreTorneo}</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          {partido.nombreRonda || 'Jornada ' + partido.jornada} · Partido {partido.numeroPartido || partido.idPartido}
+                        </p>
+                      </div>
+                      <span className={cerrada
+                        ? 'shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-emerald-800'
+                        : partido.estadoActa === 'Borrador'
+                          ? 'shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-amber-800'
+                          : 'shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-600'}
+                      >
+                        {obtenerEstadoActa(partido)}
+                      </span>
+                    </div>
+
+                    <div className="my-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-lg bg-slate-50 px-3 py-4 text-center">
+                      <p className="break-words text-sm font-bold text-slate-800">{equipoLocal}</p>
+                      <strong className="text-xs font-black text-slate-400">VS</strong>
+                      <p className="break-words text-sm font-bold text-slate-800">{equipoVisitante}</p>
+                    </div>
+
+                    <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+                      <span className="inline-flex items-center gap-1.5"><CalendarDaysIcon className="h-4 w-4 shrink-0" />{formatearFecha(partido.fechaHoraInicio)}</span>
+                      <span className="inline-flex items-center gap-1.5"><ClockIcon className="h-4 w-4 shrink-0" />{formatearHorario(partido)}</span>
+                      {partido.nombreCancha && <span className="inline-flex items-center gap-1.5"><MapPinIcon className="h-4 w-4 shrink-0" />{partido.nombreCancha}</span>}
+                    </div>
+                    <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="min-w-0 truncate text-xs text-slate-500">
+                        {partido.nombresArbitros || 'Sin árbitro asignado'}
+                        {cerrada && ' · ' + (partido.golesLocal ?? 0) + '–' + (partido.golesVisitante ?? 0)}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setPartidoSeleccionado(partido)}
+                        disabled={!disponible}
+                        className={cerrada
+                          ? 'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400'
+                          : 'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400'}
+                      >
+                        <DocumentTextIcon className="h-4 w-4" />
+                        {cerrada ? 'Ver acta' : partido.estadoActa === 'Borrador' ? 'Continuar acta' : disponible ? 'Crear acta de partido' : 'No disponible'}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex min-h-56 flex-col items-center justify-center px-4 text-center">
+              <DocumentTextIcon className="h-10 w-10 text-slate-300" />
+              <p className="mt-3 font-bold text-slate-700">
+                {partidos.length ? 'No hay partidos que coincidan con los filtros.' : 'Todavía no hay partidos para mostrar.'}
+              </p>
+              <p className="mt-1 max-w-md text-sm text-slate-500">Los partidos generados para tus torneos aparecerán en esta lista.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {partidoSeleccionado && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-5">
+          <button
+            type="button"
+            aria-label="Cerrar acta"
+            onClick={() => setPartidoSeleccionado(null)}
+            className="absolute inset-0 cursor-default"
+          />
+          <ActaPartidoForm
+            idPartido={partidoSeleccionado.idPartido}
+            idArbitro={obtenerIdArbitroActa(partidoSeleccionado)}
+            onClose={() => setPartidoSeleccionado(null)}
+            onSaved={() => cargarPartidos(true)}
+          />
+        </div>
+      )}
     </div>
   );
 }
