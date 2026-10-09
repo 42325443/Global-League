@@ -2,6 +2,7 @@
 // Uso: node backend/scripts/aplicarMigracionActa.js
 import fs from 'fs';
 import path from 'path';
+import process from 'node:process';
 import { fileURLToPath } from 'url';
 import pool from '../src/config/db.js';
 

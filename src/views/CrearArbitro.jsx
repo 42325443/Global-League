@@ -7,10 +7,6 @@ export default function CrearArbitro() {
   return (
     <ArbitroWizard
       onVolver={() => navigate("/arbitros")}
-      onArbitroCreado={(arbitro) => {
-        console.log("Árbitro creado:", arbitro);
-        navigate("/arbitros");
-      }}
     />
   );
 }

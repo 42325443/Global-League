@@ -89,6 +89,14 @@ export default function Inicio() {
   const [errores, setErrores] = useState({});
   const [cargando, setCargando] = useState(true);
   const [intento, setIntento] = useState(0);
+  const [ahora, setAhora] = useState(0);
+
+  useEffect(() => {
+    const actualizarHora = () => setAhora(Date.now());
+    actualizarHora();
+    const intervalo = window.setInterval(actualizarHora, 60_000);
+    return () => window.clearInterval(intervalo);
+  }, []);
 
   useEffect(() => {
     let activo = true;
@@ -125,9 +133,9 @@ export default function Inicio() {
     .filter((partido) => (
       partido.fechaHoraInicio
       && partido.fechaHoraFin
-      && new Date(String(partido.fechaHoraInicio).replace(' ', 'T')).getTime() >= Date.now()
+      && new Date(String(partido.fechaHoraInicio).replace(' ', 'T')).getTime() >= ahora
     ))
-    .sort((a, b) => String(a.fechaHoraInicio).localeCompare(String(b.fechaHoraInicio))), [datos.partidos]);
+    .sort((a, b) => String(a.fechaHoraInicio).localeCompare(String(b.fechaHoraInicio))), [datos.partidos, ahora]);
   const proximosPartidos = partidosFuturos.slice(0, 2);
 
   const torneosDestacados = useMemo(() => [...datos.torneos]

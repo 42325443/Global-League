@@ -2,9 +2,21 @@
 import { useState, useEffect } from 'react';
 import { apiFetch } from '../lib/api';
 
+const formatearFechaResumen = (valor) => {
+  if (!valor) return 'Sin definir';
+  const fecha = new Date(`${valor}T12:00:00`);
+  if (Number.isNaN(fecha.getTime())) return valor;
+  return new Intl.DateTimeFormat('es-AR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  }).format(fecha);
+};
+
 export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
   const [paso, setPaso] = useState(1);
   const [cargando, setCargando] = useState(false);
+  const [creado, setCreado] = useState(false);
   const [error, setError] = useState(null);
   const [errorEquipos, setErrorEquipos] = useState('');
   const [cargandoEquipos, setCargandoEquipos] = useState(true);
@@ -17,6 +29,15 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
   // Estado para la gestión de equipos
   const [equiposDisponibles, setEquiposDisponibles] = useState([]);
   const [equiposSeleccionados, setEquiposSeleccionados] = useState([]);
+  const [criteriosDesempate, setCriteriosDesempate] = useState([
+    'Diferencia',
+    'MarcadorAFavor',
+    'ResultadoDirecto'
+  ]);
+  const [reglasSancion, setReglasSancion] = useState([
+    { tipoEvento: 'Tarjeta Amarilla', cantidadAcumulada: 3, partidosSuspension: 1 },
+    { tipoEvento: 'Tarjeta Roja', cantidadAcumulada: 1, partidosSuspension: 1 }
+  ]);
 
   // Estado del formulario
   const [formData, setFormData] = useState({
@@ -37,6 +58,15 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
   const limiteSeleccion = formData.cantidadEquiposMax === 'Sin limite'
     ? Number.POSITIVE_INFINITY
     : Number(formData.cantidadEquiposMax);
+  const deporteSeleccionado = deportes.find((deporte) => (
+    String(deporte.idDeporte || deporte.id_deporte) === String(formData.idDeporte)
+  ));
+  const disciplinaSeleccionada = disciplinas.find((disciplina) => (
+    String(disciplina.idDisciplina || disciplina.id_disciplina) === String(formData.idDisciplina)
+  ));
+  const formatoSeleccionado = formatos.find((formato) => (
+    String(formato.id_formato) === String(formData.idFormato)
+  ));
 
   useEffect(() => {
     apiFetch('/catalogos/deportes')
@@ -148,18 +178,49 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
     ));
   };
 
-  const handleFinalizar = async (e) => {
-    e.preventDefault();
-    if (equiposSeleccionados.length < 2) {
-      setError('Seleccioná al menos 2 equipos para crear los partidos del torneo.');
+  const continuarAConfirmacion = () => {
+    setError(null);
+    if (!formData.nombreTorneo.trim()) {
+      setError('Ingresá un nombre para el torneo.');
       return;
     }
-    if (equiposSeleccionados.length > limiteSeleccion) {
-      setError(`El límite del torneo es de ${limiteSeleccion} equipos.`);
+    if (!formData.fechaInicio || !formData.fechaFin) {
+      setError('Completá las fechas de inicio y fin del torneo.');
       return;
     }
     if (formData.fechaFin < formData.fechaInicio) {
       setError('La fecha de fin debe ser igual o posterior a la fecha de inicio.');
+      return;
+    }
+    setPaso(5);
+  };
+
+  const handleFinalizar = async () => {
+    if (cargando || creado) return;
+    setError(null);
+    if (!formData.nombreTorneo.trim()) {
+      setError('Ingresá un nombre para el torneo.');
+      setPaso(4);
+      return;
+    }
+    if (equiposSeleccionados.length < 2) {
+      setError('Seleccioná al menos 2 equipos para crear los partidos del torneo.');
+      setPaso(3);
+      return;
+    }
+    if (equiposSeleccionados.length > limiteSeleccion) {
+      setError(`El límite del torneo es de ${limiteSeleccion} equipos.`);
+      setPaso(3);
+      return;
+    }
+    if (!formData.fechaInicio || !formData.fechaFin) {
+      setError('Completá las fechas de inicio y fin del torneo.');
+      setPaso(4);
+      return;
+    }
+    if (formData.fechaFin < formData.fechaInicio) {
+      setError('La fecha de fin debe ser igual o posterior a la fecha de inicio.');
+      setPaso(4);
       return;
     }
     setCargando(true);
@@ -174,7 +235,9 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
       fechaFin: formData.fechaFin,
       ubicacion: formData.ubicacion,
       cantidadEquiposMax: formData.cantidadEquiposMax,
-      equiposIds: equiposSeleccionados.map((eq) => eq.id)
+      equiposIds: equiposSeleccionados.map((eq) => eq.id),
+      criteriosDesempate,
+      reglasSancion
     };
 
     try {
@@ -188,7 +251,7 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
       if (!response.ok) throw new Error(resultado.error || 'No se pudo guardar el torneo.');
 
       if (onTorneoCreado) onTorneoCreado(resultado);
-      if (onVolver) onVolver();
+      setCreado(true);
     } catch (saveError) {
       setError(saveError.message || 'No se pudo conectar con el servidor.');
     } finally {
@@ -200,20 +263,24 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
     <div className="w-full max-w-3xl mx-auto bg-slate-900 text-slate-100 p-6 md:p-8 rounded-2xl shadow-2xl border border-slate-800">
       <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
         <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-blue-400">Paso {paso} de 4</span>
-          <h2 className="text-2xl font-bold tracking-tight text-white">Crear Nuevo Torneo</h2>
+          <span className={`text-xs font-bold uppercase tracking-wider ${creado ? 'text-emerald-400' : 'text-blue-400'}`}>
+            {creado ? 'Creación completada' : `Paso ${paso} de 6`}
+          </span>
+          <h2 className="text-2xl font-bold tracking-tight text-white">
+            {creado ? 'Torneo creado exitosamente' : 'Crear nuevo torneo'}
+          </h2>
         </div>
         <button
           type="button"
           onClick={onVolver}
           className="text-slate-400 hover:text-white transition-colors cursor-pointer text-sm font-medium"
         >
-          ✕ Cancelar
+          {creado ? 'Cerrar' : '✕ Cancelar'}
         </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-2 mb-8">
-        {[1, 2, 3, 4].map((i) => (
+      {!creado && <div className="grid grid-cols-6 gap-2 mb-8">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
           <div
             key={i}
             className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -221,9 +288,34 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
             }`}
           />
         ))}
-      </div>
+      </div>}
 
-      {paso === 1 && (
+      {creado ? (
+        <div role="status" className="flex flex-col items-center py-5 text-center sm:py-8">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-400/20">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-9 w-9">
+              <path d="m5 12.5 4.2 4.2L19 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-emerald-300">¡Todo listo!</p>
+          <h3 className="mt-2 font-montserrat text-xl font-extrabold tracking-tight text-white sm:text-2xl">
+            Torneo creado exitosamente
+          </h3>
+          <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">
+            <span className="font-semibold text-slate-200">{formData.nombreTorneo.trim()}</span> ya está guardado y disponible en tu lista de torneos.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1.5 text-xs font-medium text-slate-300">
+              {equiposSeleccionados.length} equipos participantes
+            </span>
+            <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1.5 text-xs font-medium text-slate-300">
+              {formatoSeleccionado?.nombre || 'Formato configurado'}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {!creado && paso === 1 && (
         <div className="space-y-6">
           <div>
             <h3 className="text-lg font-semibold text-slate-200 mb-3">1. Selecciona el Deporte</h3>
@@ -277,7 +369,7 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
         </div>
       )}
 
-      {paso === 2 && (
+      {!creado && paso === 2 && (
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-slate-200 mb-2">Formato de Competición</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -303,7 +395,7 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
         </div>
       )}
 
-      {paso === 3 && (
+      {!creado && paso === 3 && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <div>
@@ -367,8 +459,8 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
         </div>
       )}
 
-      {paso === 4 && (
-        <form onSubmit={handleFinalizar} className="space-y-4">
+      {!creado && paso === 4 && (
+        <form onSubmit={(event) => { event.preventDefault(); continuarAConfirmacion(); }} className="space-y-4">
           <h3 className="text-lg font-semibold text-slate-200">Datos Básicos del Torneo</h3>
 
           <div>
@@ -443,47 +535,209 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
         </form>
       )}
 
-      {error && (
+      {!creado && paso === 5 && (
+        <div className="space-y-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-300">Reglas deportivas</p>
+            <h3 className="mt-0.5 text-base font-semibold text-white">Criterios para desempatar posiciones</h3>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Los tres criterios se aplican en el orden elegido cuando hay igualdad de puntos.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {criteriosDesempate.map((criterio, indice) => (
+              <label key={indice} className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/40 p-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-700 text-[10px] font-bold text-slate-300">{indice + 1}</span>
+                <select
+                  value={criterio}
+                  onChange={(event) => setCriteriosDesempate((actuales) => actuales.map((valor, posicion) => (
+                    posicion === indice ? event.target.value : valor
+                  )))}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-2 text-xs text-slate-100 outline-none focus:border-blue-500"
+                >
+                  <option value="Diferencia">Diferencia de marcador</option>
+                  <option value="MarcadorAFavor">Marcador a favor</option>
+                  <option value="ResultadoDirecto">Resultado directo</option>
+                  <option value="FairPlay">Fair play (menos tarjetas)</option>
+                </select>
+              </label>
+            ))}
+          </div>
+          <p className="text-[11px] leading-4 text-slate-500">
+            El orden no puede repetir criterios. Si continúa el empate luego de los tres, se mantiene la igualdad.
+          </p>
+          <section className="rounded-xl border border-slate-700 bg-slate-800/40 p-3">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+              <h4 className="text-sm font-bold text-slate-100">Reglas de suspensión</h4>
+              <p className="text-[11px] leading-4 text-slate-400">Se aplican al cerrar actas.</p>
+            </div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {reglasSancion.map((regla, indice) => (
+                <div key={regla.tipoEvento} className="rounded-lg border border-slate-700 bg-slate-900/60 p-2.5">
+                  <p className="mb-2 text-xs font-semibold text-slate-200">{regla.tipoEvento}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block text-[10px] font-semibold leading-4 text-slate-400">
+                      Cantidad
+                      <input type="number" min="1" max="100" required value={regla.cantidadAcumulada} onChange={(event) => setReglasSancion((actuales) => actuales.map((item, i) => i === indice ? { ...item, cantidadAcumulada: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block text-[10px] font-semibold leading-4 text-slate-400">
+                      Partidos
+                      <input type="number" min="1" max="20" required value={regla.partidosSuspension} onChange={(event) => setReglasSancion((actuales) => actuales.map((item, i) => i === indice ? { ...item, partidosSuspension: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-blue-500" />
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {!creado && paso === 6 && (
+        <div className="space-y-5">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-300">Revisión final</p>
+            <h3 className="mt-1 text-lg font-semibold text-white">Confirmá la creación del torneo</h3>
+            <p className="mt-1 text-sm text-slate-400">Revisá estos datos antes de guardar la competencia.</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 sm:p-5">
+            <h4 className="break-words text-base font-bold text-white">{formData.nombreTorneo.trim()}</h4>
+            <dl className="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 border-t border-slate-700 pt-4 sm:grid-cols-2">
+              <div className="min-w-0">
+                <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Deporte y disciplina</dt>
+                <dd className="mt-1 break-words text-sm font-medium text-slate-200">
+                  {[deporteSeleccionado?.nombre, disciplinaSeleccionada?.nombre].filter(Boolean).join(' · ') || 'Sin definir'}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Formato</dt>
+                <dd className="mt-1 text-sm font-medium text-slate-200">{formatoSeleccionado?.nombre || 'Sin definir'}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Fechas</dt>
+                <dd className="mt-1 text-sm font-medium text-slate-200">
+                  {formatearFechaResumen(formData.fechaInicio)} – {formatearFechaResumen(formData.fechaFin)}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sede / ubicación</dt>
+                <dd className="mt-1 break-words text-sm font-medium text-slate-200">{formData.ubicacion.trim() || 'Sin asignar'}</dd>
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Equipos participantes</dt>
+                <dd className="mt-1 text-sm font-medium text-slate-200">
+                  {equiposSeleccionados.length} equipos · Límite {formData.cantidadEquiposMax === 'Sin limite' ? 'sin límite' : formData.cantidadEquiposMax}
+                </dd>
+                <ul className="mt-2 flex max-h-24 flex-wrap gap-2 overflow-y-auto pr-1">
+                  {equiposSeleccionados.map((equipo) => (
+                    <li key={equipo.id} className="max-w-full truncate rounded-full border border-slate-600 bg-slate-900/70 px-2.5 py-1 text-xs text-slate-300" title={equipo.nombre || equipo.nombreEquipo}>
+                      {equipo.nombre || equipo.nombreEquipo}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Desempates (en orden)</dt>
+                <dd className="mt-2 flex flex-wrap gap-2">
+                  {criteriosDesempate.map((criterio, indice) => (
+                    <span key={criterio} className="rounded-full border border-slate-600 bg-slate-900/70 px-2.5 py-1 text-xs text-slate-300">
+                      {indice + 1}. {criterio === 'MarcadorAFavor' ? 'Marcador a favor' : criterio === 'ResultadoDirecto' ? 'Resultado directo' : criterio === 'FairPlay' ? 'Fair play' : 'Diferencia'}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Suspensiones automáticas</dt>
+                <dd className="mt-1 text-sm font-medium text-slate-200">
+                  {reglasSancion.map((regla) => `${regla.cantidadAcumulada} ${regla.tipoEvento === 'Tarjeta Amarilla' ? 'amarillas' : 'roja(s)'} → ${regla.partidosSuspension} partido(s)`).join(' · ')}
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <p className="text-xs leading-5 text-slate-400">Al confirmar, el torneo se guardará con los equipos seleccionados.</p>
+        </div>
+      )}
+
+      {!creado && error && (
         <p role="alert" className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {error}
         </p>
       )}
 
-      <div className="flex justify-between items-center mt-8 pt-4 border-t border-slate-800">
-        {paso > 1 ? (
-          <button
-            type="button"
-            onClick={() => setPaso((p) => p - 1)}
-            className="px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 text-xs font-semibold cursor-pointer"
-          >
-            Anterior
-          </button>
+      <div className="mt-8 flex items-center justify-between border-t border-slate-800 pt-4">
+        {creado ? (
+          <div className="ml-auto flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={onVolver}
+              className="rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-500 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/30"
+            >
+              Volver a torneos
+            </button>
+          </div>
         ) : (
-          <div />
-        )}
+          <>
+            {paso > 1 ? (
+              <button
+                type="button"
+                onClick={() => { setError(null); setPaso((actual) => actual - 1); }}
+                disabled={cargando}
+                className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-50"
+              >
+                Anterior
+              </button>
+            ) : <div />}
 
-        {paso < 4 ? (
-          <button
-            type="button"
-            onClick={() => setPaso((p) => p + 1)}
-            disabled={
-              (paso === 1 && (!formData.idDeporte || !formData.idDisciplina)) ||
-              (paso === 2 && !formData.idFormato) ||
-              (paso === 3 && (equiposSeleccionados.length < 2 || equiposSeleccionados.length > limiteSeleccion))
-            }
-            className="px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold text-xs hover:bg-blue-500 disabled:opacity-50 cursor-pointer"
-          >
-            Siguiente
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleFinalizar}
-            disabled={cargando || !formData.nombreTorneo || !formData.fechaInicio || !formData.fechaFin}
-            className="px-5 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-500 disabled:opacity-50 cursor-pointer"
-          >
-            {cargando ? 'Guardando...' : 'Guardar y Registrar Torneo'}
-          </button>
+            {paso < 3 ? (
+              <button
+                type="button"
+                onClick={() => { setError(null); setPaso((actual) => actual + 1); }}
+                disabled={
+                  (paso === 1 && (!formData.idDeporte || !formData.idDisciplina)) ||
+                  (paso === 2 && !formData.idFormato)
+                }
+                className="rounded-lg bg-blue-600 px-5 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Siguiente
+              </button>
+            ) : paso === 3 ? (
+              <button
+                type="button"
+                onClick={() => { setError(null); setPaso(4); }}
+                disabled={equiposSeleccionados.length < 2 || equiposSeleccionados.length > limiteSeleccion}
+                className="rounded-lg bg-blue-600 px-5 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Siguiente
+              </button>
+            ) : paso === 4 ? (
+              <button
+                type="button"
+                onClick={continuarAConfirmacion}
+                disabled={!formData.nombreTorneo.trim() || !formData.fechaInicio || !formData.fechaFin}
+                className="rounded-lg bg-blue-600 px-5 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Configurar desempates
+              </button>
+            ) : paso === 5 ? (
+              <button
+                type="button"
+                onClick={() => { setError(null); setPaso(6); }}
+                disabled={new Set(criteriosDesempate).size !== 3}
+                className="rounded-lg bg-blue-600 px-5 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Revisar torneo
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleFinalizar}
+                disabled={cargando}
+                className="rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
+              >
+                {cargando ? 'Creando torneo…' : 'Confirmar y crear torneo'}
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
