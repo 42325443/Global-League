@@ -7,6 +7,8 @@ import equipoRoutes from './routes/equipoRoutes.js';
 import calendarioRoutes from './routes/calendarioRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import arbitroRoutes from './routes/arbitroRoutes.js';
+import estadisticasRoutes from './routes/estadisticasRoutes.js';
+import actaRoutes from './routes/actaRoutes.js';
 import { requireAuth } from './middleware/requireAuth.js';
 import { assertAuthConfiguration } from './services/authService.js';
 
@@ -30,6 +32,8 @@ app.use('/api', requireAuth, torneoRoutes);
 app.use('/api', requireAuth, equipoRoutes);
 app.use('/api', requireAuth, calendarioRoutes);
 app.use('/api', requireAuth, arbitroRoutes);
+app.use('/api', requireAuth, estadisticasRoutes);
+app.use('/api', requireAuth, actaRoutes);
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en el puerto ${PORT}`);

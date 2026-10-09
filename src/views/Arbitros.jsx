@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import ArbitroWizard from "../components/ArbitroWizard";
+import ActaPartidoForm from "../components/ActaPartidoForm";
 import { apiFetch } from "../lib/api";
 
 const etiquetaDeporte = (nombre = "") => {
@@ -19,6 +20,11 @@ export default function Arbitros() {
   const [arbitroSeleccionado, setArbitroSeleccionado] = useState(null);
   const [actualizandoEstado, setActualizandoEstado] = useState(false);
   const [errorEstado, setErrorEstado] = useState("");
+  const [partidosArbitro, setPartidosArbitro] = useState(null);
+  const [partidosAsignados, setPartidosAsignados] = useState([]);
+  const [cargandoPartidos, setCargandoPartidos] = useState(false);
+  const [errorPartidos, setErrorPartidos] = useState("");
+  const [partidoParaActa, setPartidoParaActa] = useState(null);
 
   const deportes = ["Todos", "Fútbol", "Básquet", "Vóley"];
 
@@ -92,6 +98,51 @@ export default function Arbitros() {
     }
   };
 
+  const abrirPartidosArbitro = async (arbitro) => {
+    setArbitroSeleccionado(null);
+    setPartidosArbitro({ tipo: "arbitro", arbitro });
+    setCargandoPartidos(true);
+    setErrorPartidos("");
+    try {
+      const response = await apiFetch(`/arbitros/${arbitro.id}/partidos`);
+      const resultado = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(resultado.error || "No se pudieron cargar los partidos.");
+      setPartidosAsignados(Array.isArray(resultado) ? resultado : []);
+    } catch (error) {
+      setErrorPartidos(error.message || "No se pudieron cargar los partidos.");
+    } finally {
+      setCargandoPartidos(false);
+    }
+  };
+
+  const abrirPartidosSinArbitro = async () => {
+    setPartidosArbitro({ tipo: "sin-arbitro", arbitro: null });
+    setCargandoPartidos(true);
+    setErrorPartidos("");
+    try {
+      const response = await apiFetch("/partidos/sin-arbitro");
+      const resultado = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(resultado.error || "No se pudieron cargar los partidos sin árbitro.");
+      setPartidosAsignados(Array.isArray(resultado) ? resultado : []);
+    } catch (error) {
+      setErrorPartidos(error.message || "No se pudieron cargar los partidos sin árbitro.");
+    } finally {
+      setCargandoPartidos(false);
+    }
+  };
+
+  const actualizarListaPartidos = async () => {
+    if (!partidosArbitro) return;
+    try {
+      const ruta = partidosArbitro.tipo === "sin-arbitro"
+        ? "/partidos/sin-arbitro"
+        : `/arbitros/${partidosArbitro.arbitro.id}/partidos`;
+      const response = await apiFetch(ruta);
+      const resultado = await response.json().catch(() => []);
+      if (response.ok && Array.isArray(resultado)) setPartidosAsignados(resultado);
+    } catch { /* El estado actual queda visible; se puede volver a abrir la bandeja. */ }
+  };
+
   const arbitrosFiltrados = arbitros.filter((arbitro) => {
     const nombreCompleto =
       `${arbitro.nombre} ${arbitro.apellido}`.toLowerCase();
@@ -125,12 +176,20 @@ export default function Arbitros() {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsWizardOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-semibold transition"
-        >
-          + Crear árbitro
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            onClick={abrirPartidosSinArbitro}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            Partidos sin árbitro
+          </button>
+          <button
+            onClick={() => setIsWizardOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-semibold transition"
+          >
+            + Crear árbitro
+          </button>
+        </div>
       </div>
 
       {/* RESUMEN */}
@@ -520,6 +579,12 @@ export default function Arbitros() {
                 Cerrar
               </button>
               <button
+                onClick={() => abrirPartidosArbitro(arbitroSeleccionado)}
+                className="rounded-lg border border-blue-200 px-5 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+              >
+                Ver partidos
+              </button>
+              <button
                 onClick={cambiarEstadoArbitro}
                 disabled={actualizandoEstado}
                 className={`rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-wait disabled:opacity-60 ${
@@ -538,6 +603,69 @@ export default function Arbitros() {
 
           </div>
 
+        </div>
+      )}
+
+      {partidosArbitro && !partidoParaActa && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <button type="button" aria-label="Cerrar partidos" onClick={() => setPartidosArbitro(null)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
+          <section className="relative z-10 max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-lime-700">Gestión de actas</p>
+                <h2 className="mt-1 text-xl font-bold text-slate-900">
+                  {partidosArbitro.tipo === "sin-arbitro" ? "Partidos sin árbitro asignado" : `Partidos de ${partidosArbitro.arbitro.nombre} ${partidosArbitro.arbitro.apellido}`}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {partidosArbitro.tipo === "sin-arbitro" ? "Estos encuentros permiten que el organizador cargue el acta sin atribuirla a un árbitro." : "Solo se muestran los encuentros enlazados a este árbitro."}
+                </p>
+              </div>
+              <button type="button" onClick={() => setPartidosArbitro(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">✕</button>
+            </div>
+            {errorPartidos && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorPartidos}</p>}
+            {cargandoPartidos ? (
+              <p className="py-10 text-center text-sm text-slate-500">Cargando partidos…</p>
+            ) : partidosAsignados.length ? (
+              <div className="mt-4 space-y-3">
+                {partidosAsignados.map((partido) => {
+                  const cerrada = partido.estadoActa === "Cerrada" || Boolean(partido.fechaCierreActa);
+                  const idArbitro = partidosArbitro.tipo === "sin-arbitro" ? null : partidosArbitro.arbitro.id;
+                  return (
+                    <article key={partido.idPartido} className="flex flex-col gap-3 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{partido.nombreTorneo} · {partido.nombreRonda || `Jornada ${partido.jornada}`}</p>
+                        <p className="mt-1 font-bold text-slate-900">{partido.equipoLocal} <span className="text-slate-400">vs.</span> {partido.equipoVisitante}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {partido.fechaHoraInicio ? new Date(partido.fechaHoraInicio).toLocaleString("es-AR", { dateStyle: "medium", timeStyle: "short" }) : "Sin horario asignado"}
+                          {partido.rolArbitro ? ` · ${partido.rolArbitro}` : ""}
+                          {cerrada ? ` · ${partido.marcadorLocal}–${partido.marcadorVisitante}` : ""}
+                        </p>
+                      </div>
+                      <button type="button" onClick={() => setPartidoParaActa({ idPartido: partido.idPartido, idArbitro })} className={`shrink-0 rounded-lg px-4 py-2.5 text-sm font-semibold ${cerrada ? "border border-slate-300 text-slate-700 hover:bg-slate-50" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+                        {cerrada ? "Ver acta" : partido.estadoActa === "Borrador" ? "Continuar acta" : "Crear acta de partido"}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-12 text-center">
+                <p className="font-semibold text-slate-700">No hay partidos en esta lista.</p>
+                <p className="mt-1 text-sm text-slate-500">Los próximos encuentros aparecerán acá cuando estén generados.</p>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+
+      {partidoParaActa && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-sm sm:p-5">
+          <ActaPartidoForm
+            idPartido={partidoParaActa.idPartido}
+            idArbitro={partidoParaActa.idArbitro}
+            onClose={() => setPartidoParaActa(null)}
+            onSaved={actualizarListaPartidos}
+          />
         </div>
       )}
 

@@ -7,6 +7,17 @@ import { apiFetch } from '../lib/api';
 // Array inicial vacío listo para recibir torneos reales
 const MOCK_TORNEOS = [];
 
+const etiquetaEstadoPartido = (partido) => {
+  if (partido.tipoResolucion === 'PaseRival') return 'Avanza por baja';
+  if (partido.tipoResolucion === 'VictoriaAdministrativa') return 'Victoria administrativa';
+  if (partido.tipoResolucion === 'SinPuntos') return 'Resuelto sin puntos';
+  return partido.estado || 'Pendiente';
+};
+
+const puedeEditarInscripciones = (torneo) => {
+  return torneo?.estado === 'Próximo' && Boolean(Number(torneo.permiteCambiarEquipos));
+};
+
 export default function Torneos() {
   const [torneos, setTorneos] = useState(MOCK_TORNEOS);
   const [deporteFiltro, setDeporteFiltro] = useState('');
@@ -20,6 +31,8 @@ export default function Torneos() {
   const [torneoSeleccionado, setTorneoSeleccionado] = useState(null);
   const [pestanaDetalle, setPestanaDetalle] = useState('principal');
   const [partidos, setPartidos] = useState([]);
+  const [posiciones, setPosiciones] = useState([]);
+  const [estadisticasTorneo, setEstadisticasTorneo] = useState(null);
   const [cargandoPartidos, setCargandoPartidos] = useState(false);
   const [generandoFixture, setGenerandoFixture] = useState(false);
   const [errorPartidos, setErrorPartidos] = useState('');
@@ -27,6 +40,18 @@ export default function Torneos() {
   const [torneoAEliminar, setTorneoAEliminar] = useState(null);
   const [eliminandoTorneo, setEliminandoTorneo] = useState(false);
   const [errorEliminacion, setErrorEliminacion] = useState('');
+  const [mostrarBajaEquipo, setMostrarBajaEquipo] = useState(false);
+  const [equipoBaja, setEquipoBaja] = useState('');
+  const [motivoBaja, setMotivoBaja] = useState('');
+  const [politicaBaja, setPoliticaBaja] = useState('VictoriaAdministrativa');
+  const [procesandoBaja, setProcesandoBaja] = useState(false);
+  const [errorBaja, setErrorBaja] = useState('');
+  const [mostrarGestionEquipos, setMostrarGestionEquipos] = useState(false);
+  const [equiposDisponibles, setEquiposDisponibles] = useState([]);
+  const [equiposSeleccionados, setEquiposSeleccionados] = useState([]);
+  const [cargandoCatalogoEquipos, setCargandoCatalogoEquipos] = useState(false);
+  const [guardandoEquipos, setGuardandoEquipos] = useState(false);
+  const [errorGestionEquipos, setErrorGestionEquipos] = useState('');
 
   // 1. Función extraída para poder recargar los torneos cuando queramos
   const cargarTorneos = () => {
@@ -67,15 +92,31 @@ export default function Torneos() {
     setTorneoSeleccionado(torneo);
     setPestanaDetalle('principal');
     setPartidos([]);
+    setPosiciones([]);
+    setEstadisticasTorneo(null);
     setErrorPartidos('');
     setCargandoPartidos(true);
-    apiFetch(`/torneos/${torneo.id}/partidos`)
-      .then(async (res) => {
-        const data = await res.json().catch(() => []);
-        if (!res.ok) throw new Error(data.error || 'No se pudieron cargar los partidos.');
-        return data;
+    Promise.all([
+      apiFetch(`/torneos/${torneo.id}/partidos`),
+      apiFetch(`/torneos/${torneo.id}/posiciones`),
+      apiFetch(`/torneos/${torneo.id}/estadisticas`),
+    ])
+      .then(async ([partidosRes, posicionesRes, estadisticasRes]) => {
+        const [partidosData, posicionesData, estadisticasData] = await Promise.all([
+          partidosRes.json().catch(() => []),
+          posicionesRes.json().catch(() => ({})),
+          estadisticasRes.json().catch(() => ({})),
+        ]);
+        if (!partidosRes.ok) throw new Error(partidosData.error || 'No se pudieron cargar los partidos.');
+        if (!posicionesRes.ok) throw new Error(posicionesData.error || 'No se pudo calcular la tabla del torneo.');
+        if (!estadisticasRes.ok) throw new Error(estadisticasData.error || 'No se pudieron cargar las estadísticas.');
+        return { partidosData, posicionesData, estadisticasData };
       })
-      .then((data) => setPartidos(Array.isArray(data) ? data : []))
+      .then(({ partidosData, posicionesData, estadisticasData }) => {
+        setPartidos(Array.isArray(partidosData) ? partidosData : []);
+        setPosiciones(Array.isArray(posicionesData.posiciones) ? posicionesData.posiciones : []);
+        setEstadisticasTorneo(estadisticasData);
+      })
       .catch((error) => setErrorPartidos(error.message || 'No se pudieron cargar los partidos.'))
       .finally(() => setCargandoPartidos(false));
     requestAnimationFrame(() => setIsDetalleModalVisible(true));
@@ -86,6 +127,8 @@ export default function Torneos() {
     setTimeout(() => {
       setTorneoSeleccionado(null);
       setPartidos([]);
+      setPosiciones([]);
+      setEstadisticasTorneo(null);
     }, 200);
   };
 
@@ -114,6 +157,39 @@ export default function Torneos() {
   const esTorneoEliminatorio = (torneo) => (
     String(torneo?.modalidad || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('elimin')
   );
+  const anotadoresTorneo = estadisticasTorneo?.tipoPuntuacion === 'Goles'
+    ? estadisticasTorneo?.goleadores || []
+    : estadisticasTorneo?.anotadores || [];
+  const torneoFinalizado = torneoSeleccionado?.estado === 'Finalizado' || (
+    !['Cancelado', 'Suspendido'].includes(torneoSeleccionado?.estado)
+    && partidos.length > 0
+    && partidos.every((partido) => ['Finalizado', 'Anulado', 'Pase libre'].includes(partido.estado))
+  );
+  const podioTorneo = useMemo(() => {
+    if (!torneoFinalizado) return null;
+
+    if (!esTorneoEliminatorio(torneoSeleccionado)) {
+      const equiposConPartidos = posiciones.filter((equipo) => Number(equipo.pj) > 0);
+      return {
+        campeon: equiposConPartidos[0]?.equipo || null,
+        subcampeon: equiposConPartidos[1]?.equipo || null
+      };
+    }
+
+    const final = partidos.find((partido) => (
+      String(partido.nombreRonda || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() === 'final'
+      && partido.idEquipoGanador != null
+    ));
+    if (!final) return { campeon: null, subcampeon: null };
+
+    const ganador = Number(final.idEquipoGanador);
+    const equipoLocal = Number(final.idEquipoLocal) === ganador ? final.equipoLocal : null;
+    const equipoVisitante = Number(final.idEquipoVisitante) === ganador ? final.equipoVisitante : null;
+    return {
+      campeon: equipoLocal || equipoVisitante || null,
+      subcampeon: equipoLocal ? final.equipoVisitante : equipoVisitante ? final.equipoLocal : null
+    };
+  }, [torneoFinalizado, torneoSeleccionado, partidos, posiciones]);
 
   const generarFixtureExistente = async () => {
     if (!torneoSeleccionado || generandoFixture) return;
@@ -163,15 +239,15 @@ export default function Torneos() {
                 <article key={partido.idPartido} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
                   <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-slate-400">
                     <span>Partido {partido.numeroPartido || partido.idPartido}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500">{partido.estado || 'Pendiente'}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500">{etiquetaEstadoPartido(partido)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate font-medium text-slate-800">{nombreParticipante(partido, 'local')}</span>
+                    <span className={`min-w-0 truncate font-medium ${Number(partido.idEquipoGanador) === Number(partido.idEquipoLocal) ? 'text-emerald-700' : 'text-slate-800'}`}>{nombreParticipante(partido, 'local')}</span>
                     <strong className="shrink-0 font-mono text-slate-900">{partido.golesLocal ?? '—'}</strong>
                   </div>
                   <div className="my-1 border-t border-slate-100" />
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate font-medium text-slate-800">{nombreParticipante(partido, 'visitante')}</span>
+                    <span className={`min-w-0 truncate font-medium ${Number(partido.idEquipoGanador) === Number(partido.idEquipoVisitante) ? 'text-emerald-700' : 'text-slate-800'}`}>{nombreParticipante(partido, 'visitante')}</span>
                     <strong className="shrink-0 font-mono text-slate-900">{partido.golesVisitante ?? '—'}</strong>
                   </div>
                 </article>
@@ -230,6 +306,121 @@ export default function Torneos() {
     }
   };
 
+  const registrarBajaEquipo = async (event) => {
+    event.preventDefault();
+    if (!torneoSeleccionado || !equipoBaja || procesandoBaja) return;
+    setProcesandoBaja(true);
+    setErrorBaja('');
+    try {
+      const response = await apiFetch(`/torneos/${torneoSeleccionado.id}/bajas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idEquipo: Number(equipoBaja),
+          motivo: motivoBaja,
+          politicaBaja: esTorneoEliminatorio(torneoSeleccionado) ? null : politicaBaja,
+        }),
+      });
+      const resultado = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(resultado.error || 'No se pudo registrar la baja.');
+      const [partidosRes, posicionesRes, estadisticasRes] = await Promise.all([
+        apiFetch(`/torneos/${torneoSeleccionado.id}/partidos`),
+        apiFetch(`/torneos/${torneoSeleccionado.id}/posiciones`),
+        apiFetch(`/torneos/${torneoSeleccionado.id}/estadisticas`),
+      ]);
+      const [partidosData, posicionesData, estadisticasData] = await Promise.all([
+        partidosRes.json().catch(() => []),
+        posicionesRes.json().catch(() => ({})),
+        estadisticasRes.json().catch(() => ({})),
+      ]);
+      if (!partidosRes.ok || !posicionesRes.ok || !estadisticasRes.ok) {
+        throw new Error('La baja se guardó, pero no se pudieron refrescar los detalles del torneo.');
+      }
+      setPartidos(partidosData);
+      setPosiciones(posicionesData.posiciones || []);
+      setEstadisticasTorneo(estadisticasData);
+      setMostrarBajaEquipo(false);
+      setEquipoBaja('');
+      setMotivoBaja('');
+      cargarTorneos();
+    } catch (error) {
+      setErrorBaja(error.message || 'No se pudo registrar la baja.');
+    } finally {
+      setProcesandoBaja(false);
+    }
+  };
+
+  const abrirGestionEquipos = async () => {
+    if (!torneoSeleccionado || !puedeEditarInscripciones(torneoSeleccionado)) return;
+    setErrorGestionEquipos('');
+    setCargandoCatalogoEquipos(true);
+    setEquiposSeleccionados(posiciones
+      .filter((equipo) => equipo.estadoParticipacion !== 'Baja')
+      .map((equipo) => Number(equipo.equipoId)));
+    setMostrarGestionEquipos(true);
+    try {
+      const response = await apiFetch('/equipos');
+      const resultado = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(resultado.error || 'No se pudieron cargar los equipos disponibles.');
+      setEquiposDisponibles(Array.isArray(resultado) ? resultado : []);
+    } catch (error) {
+      setErrorGestionEquipos(error.message || 'No se pudieron cargar los equipos disponibles.');
+    } finally {
+      setCargandoCatalogoEquipos(false);
+    }
+  };
+
+  const alternarEquipoSeleccionado = (idEquipo) => {
+    const id = Number(idEquipo);
+    setEquiposSeleccionados((actuales) => (
+      actuales.includes(id) ? actuales.filter((item) => item !== id) : [...actuales, id]
+    ));
+  };
+
+  const guardarEquiposTorneo = async (event) => {
+    event.preventDefault();
+    if (!torneoSeleccionado || guardandoEquipos) return;
+    setErrorGestionEquipos('');
+    setGuardandoEquipos(true);
+    try {
+      const response = await apiFetch(`/torneos/${torneoSeleccionado.id}/equipos`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ equiposIds: equiposSeleccionados }),
+      });
+      const resultado = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(resultado.error || 'No se pudieron actualizar los participantes.');
+
+      const [partidosRes, posicionesRes, estadisticasRes] = await Promise.all([
+        apiFetch(`/torneos/${torneoSeleccionado.id}/partidos`),
+        apiFetch(`/torneos/${torneoSeleccionado.id}/posiciones`),
+        apiFetch(`/torneos/${torneoSeleccionado.id}/estadisticas`),
+      ]);
+      const [partidosData, posicionesData, estadisticasData] = await Promise.all([
+        partidosRes.json().catch(() => []),
+        posicionesRes.json().catch(() => ({})),
+        estadisticasRes.json().catch(() => ({})),
+      ]);
+      if (!partidosRes.ok || !posicionesRes.ok || !estadisticasRes.ok) {
+        throw new Error('Los participantes se guardaron, pero no se pudo actualizar el detalle del torneo.');
+      }
+
+      setPartidos(Array.isArray(partidosData) ? partidosData : []);
+      setPosiciones(Array.isArray(posicionesData.posiciones) ? posicionesData.posiciones : []);
+      setEstadisticasTorneo(estadisticasData);
+      setTorneoSeleccionado((actual) => actual ? {
+        ...actual,
+        equiposInscriptos: equiposSeleccionados.length,
+      } : actual);
+      setMostrarGestionEquipos(false);
+      cargarTorneos();
+    } catch (error) {
+      setErrorGestionEquipos(error.message || 'No se pudieron actualizar los participantes.');
+    } finally {
+      setGuardandoEquipos(false);
+    }
+  };
+
   useEffect(() => {
     if (!torneoAEliminar || eliminandoTorneo) return undefined;
 
@@ -259,6 +450,20 @@ export default function Torneos() {
       return coincideDeporte && coincideDisciplina && coincideModalidad && coincideFecha;
     });
   }, [torneos, deporteFiltro, disciplinaFiltro, modalidadFiltro, fechaFiltro]);
+
+  const equiposParaGestion = equiposDisponibles.filter((equipo) => (
+    Number(equipo.idDisciplina) === Number(torneoSeleccionado?.idDisciplina)
+  ));
+  const limiteEquiposGestion = Number(torneoSeleccionado?.cantidadEquiposMax);
+  const tieneLimiteEquiposGestion = Number.isInteger(limiteEquiposGestion) && limiteEquiposGestion >= 2;
+  const superaLimiteEquiposGestion = tieneLimiteEquiposGestion && equiposSeleccionados.length > limiteEquiposGestion;
+  const idsParticipantesActuales = posiciones
+    .filter((equipo) => equipo.estadoParticipacion !== 'Baja')
+    .map((equipo) => Number(equipo.equipoId))
+    .sort((a, b) => a - b);
+  const idsParticipantesSeleccionados = [...equiposSeleccionados].sort((a, b) => a - b);
+  const participantesSinCambios = idsParticipantesActuales.length === idsParticipantesSeleccionados.length
+    && idsParticipantesActuales.every((id, indice) => id === idsParticipantesSeleccionados[indice]);
 
   const limpiarFiltros = () => {
     setDeporteFiltro('');
@@ -677,10 +882,46 @@ export default function Torneos() {
                     <strong>{torneoSeleccionado.modalidad}</strong>
                   </p>
                 </div>
-                <button onClick={cerrarModalDetalle} className="p-2 text-slate-400 hover:text-slate-600 cursor-pointer">
-                  ✕
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {!cargandoPartidos && puedeEditarInscripciones(torneoSeleccionado) && (
+                    <button type="button" onClick={abrirGestionEquipos} className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50">
+                      Administrar equipos
+                    </button>
+                  )}
+                  {torneoSeleccionado.estado === 'Próximo' && !puedeEditarInscripciones(torneoSeleccionado) && (
+                    <span className="hidden rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-semibold text-slate-500 sm:inline">Inscripciones cerradas</span>
+                  )}
+                  {torneoSeleccionado.estado === 'En Curso' && posiciones.some((equipo) => equipo.estadoParticipacion !== 'Baja') && (
+                    <button type="button" onClick={() => { setErrorBaja(''); setMostrarBajaEquipo(true); }} className="rounded-lg border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-50">
+                      Dar de baja equipo
+                    </button>
+                  )}
+                  <button onClick={cerrarModalDetalle} aria-label="Cerrar detalle del torneo" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer">✕</button>
+                </div>
               </div>
+
+              {torneoFinalizado && (
+                <section className="mt-4 rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-4" aria-label="Resultado final del torneo">
+                  <div className="flex items-center gap-2">
+                    <TrophyIcon className="h-5 w-5 shrink-0 text-amber-500" />
+                    <h3 className="font-bold text-slate-900">Torneo finalizado</h3>
+                  </div>
+                  {podioTorneo?.campeon ? (
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg bg-white/80 px-3 py-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">Campeón</p>
+                        <p className="mt-0.5 break-words font-bold text-slate-900">{podioTorneo.campeon}</p>
+                      </div>
+                      <div className="rounded-lg bg-white/80 px-3 py-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Subcampeón</p>
+                        <p className="mt-0.5 break-words font-semibold text-slate-800">{podioTorneo.subcampeon || 'Sin subcampeón definido'}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-slate-600">No se pudo determinar un campeón con los resultados disponibles.</p>
+                  )}
+                </section>
+              )}
 
               {/* Pestañas del Modal */}
               <div className="flex gap-6 border-b border-slate-200 mt-4 text-sm font-medium">
@@ -724,7 +965,31 @@ export default function Torneos() {
                       renderPartidosAgrupados(true)
                     ) : (
                       /* TABLA DE POSICIONES */
-                      <div className="overflow-x-auto">
+                      <div>
+                        <div className="space-y-2 md:hidden">
+                          {posiciones.map((p) => (
+                            <article key={p.equipoId} className="rounded-xl border border-slate-200 bg-white p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-600">{p.posicion}</span>
+                                  <span className="min-w-0 truncate font-semibold text-slate-800">{p.equipo}</span>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  <span className="block text-sm font-extrabold text-blue-700">{p.puntos} pts</span>
+                                  {p.estadoParticipacion === 'Baja' && <span className="text-[10px] font-bold uppercase text-red-600">Baja</span>}
+                                </div>
+                              </div>
+                              <div className="mt-3 grid grid-cols-4 gap-2 border-t border-slate-100 pt-2 text-center text-[11px]">
+                                <span className="text-slate-500">PJ <strong className="block text-slate-800">{p.pj}</strong></span>
+                                <span className="text-slate-500">PG <strong className="block text-slate-800">{p.pg}</strong></span>
+                                <span className="text-slate-500">DIF <strong className="block text-slate-800">{p.diferencia}</strong></span>
+                                <span className="text-slate-500">GF/GC <strong className="block text-slate-800">{p.gf}/{p.gc}</strong></span>
+                              </div>
+                            </article>
+                          ))}
+                          {posiciones.length === 0 && <p className="py-6 text-center text-sm text-slate-400">Aún no hay posiciones registradas para este torneo.</p>}
+                        </div>
+                        <div className="hidden overflow-x-auto md:block">
                         <table className="w-full text-left text-sm text-slate-600">
                           <thead className="text-xs uppercase text-slate-400 border-b border-slate-100">
                             <tr>
@@ -734,31 +999,38 @@ export default function Torneos() {
                               <th className="py-2 px-3 text-center">PG</th>
                               <th className="py-2 px-3 text-center">PE</th>
                               <th className="py-2 px-3 text-center">PP</th>
+                              <th className="py-2 px-3 text-center">GF</th>
+                              <th className="py-2 px-3 text-center">GC</th>
+                              <th className="py-2 px-3 text-center">DIF</th>
                               <th className="py-2 px-3 text-right font-bold">PTS</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {torneoSeleccionado.posiciones && torneoSeleccionado.posiciones.length > 0 ? (
-                              torneoSeleccionado.posiciones.map((p, idx) => (
-                                <tr key={idx} className="hover:bg-slate-50">
-                                  <td className="py-2 px-3 text-xs text-slate-400">{idx + 1}</td>
-                                  <td className="py-2 px-3 font-medium text-slate-800">{p.equipo}</td>
+                            {posiciones.length > 0 ? (
+                              posiciones.map((p) => (
+                                <tr key={p.equipoId} className="hover:bg-slate-50">
+                                  <td className="py-2 px-3 text-xs text-slate-400">{p.posicion}</td>
+                                  <td className="py-2 px-3 font-medium text-slate-800">{p.equipo}{p.estadoParticipacion === 'Baja' && <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase text-red-600">Baja</span>}</td>
                                   <td className="py-2 px-3 text-center">{p.pj}</td>
                                   <td className="py-2 px-3 text-center">{p.pg}</td>
                                   <td className="py-2 px-3 text-center">{p.pe}</td>
                                   <td className="py-2 px-3 text-center">{p.pp}</td>
-                                  <td className="py-2 px-3 text-right font-bold text-slate-900">{p.pts}</td>
+                                  <td className="py-2 px-3 text-center">{p.gf}</td>
+                                  <td className="py-2 px-3 text-center">{p.gc}</td>
+                                  <td className="py-2 px-3 text-center">{p.diferencia}</td>
+                                  <td className="py-2 px-3 text-right font-bold text-slate-900">{p.puntos}</td>
                                 </tr>
                               ))
                             ) : (
                               <tr>
-                                <td colSpan="7" className="py-6 text-center text-slate-400">
+                                <td colSpan="11" className="py-6 text-center text-slate-400">
                                   Aún no hay posiciones registradas para este torneo.
                                 </td>
                               </tr>
                             )}
                           </tbody>
                         </table>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -767,19 +1039,20 @@ export default function Torneos() {
                 {pestanaDetalle === 'partidos' && renderPartidosAgrupados(esTorneoEliminatorio(torneoSeleccionado))}
 
                 {pestanaDetalle === 'estadisticas' && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                     {/* Goleadores */}
                     <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Goleadores</h3>
-                      {torneoSeleccionado.estadisticas?.goleadores?.length > 0 ? (
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">{estadisticasTorneo?.tipoPuntuacion === 'Goles' ? 'Goleadores' : 'Anotadores'}</h3>
+                      {anotadoresTorneo.length > 0 ? (
                         <ul className="space-y-2 text-sm">
-                          {torneoSeleccionado.estadisticas.goleadores.map((g, idx) => (
+                          {anotadoresTorneo.map((g, idx) => (
                             <li key={idx} className="flex justify-between items-center text-slate-700">
                               <div>
                                 <p className="font-semibold text-slate-900">{g.jugador}</p>
                                 <p className="text-xs text-slate-400">{g.equipo}</p>
                               </div>
-                              <span className="font-mono font-bold text-slate-900">{g.goles} G</span>
+                              <span className="font-mono font-bold text-slate-900">{estadisticasTorneo?.tipoPuntuacion === 'Goles' ? `${g.goles} G` : `${g.puntos} pts`}</span>
                             </li>
                           ))}
                         </ul>
@@ -788,12 +1061,26 @@ export default function Torneos() {
                       )}
                     </div>
 
+                    <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Tarjetas rojas</h3>
+                      {estadisticasTorneo?.rojas?.length > 0 ? (
+                        <ul className="space-y-2 text-sm">
+                          {estadisticasTorneo.rojas.map((t) => (
+                            <li key={t.idJugador} className="flex items-center justify-between gap-2 text-slate-700">
+                              <div className="min-w-0"><p className="truncate font-semibold text-slate-900">{t.jugador}</p><p className="text-xs text-slate-400">{t.equipo}</p></div>
+                              <span className="font-mono font-bold text-red-600">{t.rojas} TR</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : <p className="text-xs italic text-slate-400">Sin tarjetas rojas.</p>}
+                    </div>
+
                     {/* Asistidores */}
                     <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Máximos Asistentes</h3>
-                      {torneoSeleccionado.estadisticas?.asistidores?.length > 0 ? (
+                      {estadisticasTorneo?.asistidores?.length > 0 ? (
                         <ul className="space-y-2 text-sm">
-                          {torneoSeleccionado.estadisticas.asistidores.map((a, idx) => (
+                          {estadisticasTorneo.asistidores.map((a, idx) => (
                             <li key={idx} className="flex justify-between items-center text-slate-700">
                               <div>
                                 <p className="font-semibold text-slate-900">{a.jugador}</p>
@@ -811,15 +1098,15 @@ export default function Torneos() {
                     {/* Tarjetas Amarillas */}
                     <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Tarjetas Amarillas</h3>
-                      {torneoSeleccionado.estadisticas?.amarillas?.length > 0 ? (
+                      {estadisticasTorneo?.amarillas?.length > 0 ? (
                         <ul className="space-y-2 text-sm">
-                          {torneoSeleccionado.estadisticas.amarillas.map((t, idx) => (
+                          {estadisticasTorneo.amarillas.map((t, idx) => (
                             <li key={idx} className="flex justify-between items-center text-slate-700">
                               <div>
                                 <p className="font-semibold text-slate-900">{t.jugador}</p>
                                 <p className="text-xs text-slate-400">{t.equipo}</p>
                               </div>
-                              <span className="font-mono font-bold text-amber-600">{t.tarjetas} TA</span>
+                              <span className="font-mono font-bold text-amber-600">{t.amarillas} TA</span>
                             </li>
                           ))}
                         </ul>
@@ -827,10 +1114,164 @@ export default function Torneos() {
                         <p className="text-xs text-slate-400 italic">Sin tarjetas amarillas.</p>
                       )}
                     </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="font-bold text-slate-900">Incidencias</h3>
+                            <p className="mt-0.5 text-xs text-slate-500">Tarjetas, observaciones y otros eventos de las actas cerradas.</p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{estadisticasTorneo?.incidencias?.length || 0}</span>
+                        </div>
+                        {estadisticasTorneo?.incidencias?.length ? (
+                          <ul className="space-y-2">
+                            {estadisticasTorneo.incidencias.map((incidencia) => (
+                              <li key={incidencia.id} className="min-w-0 rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+                                <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">{incidencia.tipo}</span>
+                                  <span className="text-[11px] font-medium text-slate-500">{incidencia.referencia}</span>
+                                </div>
+                                <p className="mt-2 break-words text-sm font-semibold text-slate-800">{incidencia.partido}</p>
+                                {(incidencia.jugador || incidencia.equipo) && (
+                                  <p className="mt-0.5 break-words text-xs text-slate-500">{[incidencia.jugador, incidencia.equipo].filter(Boolean).join(' · ')}</p>
+                                )}
+                                {incidencia.detalle && <p className="mt-2 break-words text-sm leading-5 text-slate-600">{incidencia.detalle}</p>}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="rounded-lg bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">No hay incidencias registradas en las actas cerradas.</p>
+                        )}
+                      </section>
+
+                      <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="font-bold text-slate-900">Suspensiones activas</h3>
+                            <p className="mt-0.5 text-xs text-slate-500">Jugadores que todavía deben cumplir partidos.</p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700">{estadisticasTorneo?.sanciones?.length || 0}</span>
+                        </div>
+                        {estadisticasTorneo?.sanciones?.length ? (
+                          <ul className="space-y-2">
+                            {estadisticasTorneo.sanciones.map((sancion) => (
+                              <li key={sancion.idSancion} className="flex min-w-0 items-start justify-between gap-3 rounded-lg border border-red-100 bg-red-50/50 p-3">
+                                <div className="min-w-0">
+                                  <p className="break-words text-sm font-bold text-slate-800">{sancion.jugador}</p>
+                                  <p className="mt-0.5 break-words text-xs text-slate-500">{sancion.equipo} · {sancion.motivo}</p>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-red-700">{sancion.partidosPendientes} {Number(sancion.partidosPendientes) === 1 ? 'partido' : 'partidos'}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="rounded-lg bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">No hay suspensiones activas.</p>
+                        )}
+                      </section>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {mostrarGestionEquipos && torneoSeleccionado && (
+          <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+            <button type="button" aria-label="Cerrar gestión de equipos" onClick={() => !guardandoEquipos && setMostrarGestionEquipos(false)} className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm" disabled={guardandoEquipos} />
+            <form onSubmit={guardarEquiposTorneo} className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Inscripción al torneo</p>
+              <h2 className="mt-1 text-xl font-bold text-slate-900">Administrar equipos</h2>
+              <p className="mt-2 text-sm text-slate-500">Seleccioná los equipos que van a participar. El límite de inscripción se cierra 24 horas antes del inicio.</p>
+              {errorGestionEquipos && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorGestionEquipos}</p>}
+              <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 text-sm">
+                <span className="font-medium text-slate-600">Equipos seleccionados</span>
+                <strong className={superaLimiteEquiposGestion ? 'text-red-600' : 'text-slate-900'}>
+                  {equiposSeleccionados.length}{tieneLimiteEquiposGestion ? ` / ${limiteEquiposGestion}` : ''}
+                </strong>
+              </div>
+              {cargandoCatalogoEquipos ? (
+                <p className="py-10 text-center text-sm text-slate-500">Cargando equipos disponibles…</p>
+              ) : equiposParaGestion.length ? (
+                <div className="mt-3 max-h-[40vh] space-y-2 overflow-y-auto pr-1">
+                  {equiposParaGestion.map((equipo) => {
+                    const id = Number(equipo.idEquipo ?? equipo.id);
+                    const seleccionado = equiposSeleccionados.includes(id);
+                    const deshabilitado = !seleccionado && tieneLimiteEquiposGestion
+                      && equiposSeleccionados.length >= limiteEquiposGestion;
+                    return (
+                      <label key={id} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${seleccionado ? 'border-blue-300 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'} ${deshabilitado ? 'cursor-not-allowed opacity-50' : ''}`}>
+                        <input type="checkbox" checked={seleccionado} disabled={deshabilitado} onChange={() => alternarEquipoSeleccionado(id)} className="h-4 w-4 shrink-0 accent-blue-600" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-bold text-slate-800">{equipo.nombreEquipo || equipo.nombre}</span>
+                          <span className="mt-0.5 block text-xs text-slate-500">{equipo.localidad || 'Sin localidad'} · {equipo.cantidadJugadores || 0} jugadores</span>
+                        </span>
+                        {seleccionado && <span className="shrink-0 rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold uppercase text-blue-700">Inscripto</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-3 rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">No hay equipos disponibles para la disciplina de este torneo.</p>
+              )}
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                Al guardar se generará nuevamente todo el fixture. Las fechas, canchas y árbitros asignados a los partidos anteriores se liberarán; el cambio no asigna puntos ni avances automáticos.
+              </div>
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setMostrarGestionEquipos(false)} disabled={guardandoEquipos} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Cancelar</button>
+                <button type="submit" disabled={guardandoEquipos || cargandoCatalogoEquipos || equiposSeleccionados.length < 2 || superaLimiteEquiposGestion || participantesSinCambios} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {guardandoEquipos ? 'Actualizando fixture…' : 'Guardar equipos y rehacer fixture'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {mostrarBajaEquipo && torneoSeleccionado && (
+          <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+            <button type="button" aria-label="Cerrar baja de equipo" onClick={() => !procesandoBaja && setMostrarBajaEquipo(false)} className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm" disabled={procesandoBaja} />
+            <form onSubmit={registrarBajaEquipo} className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Contingencia del torneo</p>
+              <h2 className="mt-1 text-xl font-bold text-slate-900">Dar de baja un equipo</h2>
+              <p className="mt-2 text-sm leading-5 text-slate-500">
+                {esTorneoEliminatorio(torneoSeleccionado)
+                  ? 'El rival de cada partido pendiente avanzará automáticamente a la siguiente ronda.'
+                  : torneoSeleccionado.estado === 'En Curso'
+                    ? 'Elegí cómo resolver los partidos pendientes del equipo.'
+                    : 'Los partidos pendientes se anularán sin modificar la tabla.'}
+              </p>
+              {errorBaja && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorBaja}</p>}
+              <label className="mt-4 block text-sm font-semibold text-slate-700">
+                Equipo
+                <select required value={equipoBaja} onChange={(event) => setEquipoBaja(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal">
+                  <option value="">Seleccioná un equipo</option>
+                  {posiciones.filter((equipo) => equipo.estadoParticipacion !== 'Baja').map((equipo) => (
+                    <option key={equipo.equipoId} value={equipo.equipoId}>{equipo.equipo}</option>
+                  ))}
+                </select>
+              </label>
+              {torneoSeleccionado.estado === 'En Curso' && !esTorneoEliminatorio(torneoSeleccionado) && (
+                <label className="mt-4 block text-sm font-semibold text-slate-700">
+                  Resolución de los partidos pendientes
+                  <select value={politicaBaja} onChange={(event) => setPoliticaBaja(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal">
+                    <option value="VictoriaAdministrativa">Victoria administrativa para el rival</option>
+                    <option value="SinPuntos">No asignar puntos a ninguno</option>
+                  </select>
+                </label>
+              )}
+              <label className="mt-4 block text-sm font-semibold text-slate-700">
+                Motivo
+                <textarea required maxLength={500} rows={3} value={motivoBaja} onChange={(event) => setMotivoBaja(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-blue-500" placeholder="Describí brevemente el motivo de la baja" />
+              </label>
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setMostrarBajaEquipo(false)} disabled={procesandoBaja} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Cancelar</button>
+                <button type="submit" disabled={procesandoBaja || !equipoBaja || !motivoBaja.trim()} className="rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60">
+                  {procesandoBaja ? 'Procesando baja…' : 'Confirmar baja'}
+                </button>
+              </div>
+            </form>
           </div>
         )}
       </div>
