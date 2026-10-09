@@ -45,6 +45,8 @@ export const getCalendario = async (req, res) => {
         p.idCancha,
         c.nombreCancha,
         c.ubicacion AS ubicacionCancha,
+        ap.estado AS estadoActa,
+        ap.idArbitro AS idArbitroActa,
         (SELECT GROUP_CONCAT(pa.idArbitro ORDER BY pa.rol, pa.idArbitro SEPARATOR ',')
          FROM partido_arbitro pa WHERE pa.idPartido = p.idPartido) AS idsArbitros,
         (SELECT GROUP_CONCAT(CONCAT(a.nombre, ' ', a.apellido) ORDER BY pa.rol, a.apellido SEPARATOR ', ')
@@ -55,6 +57,7 @@ export const getCalendario = async (req, res) => {
       LEFT JOIN equipo local ON local.idEquipo = p.idEquipoLocal
       LEFT JOIN equipo visitante ON visitante.idEquipo = p.idEquipoVisitante
       LEFT JOIN cancha c ON c.idCancha = p.idCancha
+      LEFT JOIN acta_partido ap ON ap.idPartido = p.idPartido
       WHERE t.idUsuario = ?
       ORDER BY p.fechaHoraInicio IS NULL DESC, p.fechaHoraInicio, t.fechaInicio, p.jornada, p.numeroPartido
     `, [req.user.idUsuario]);
