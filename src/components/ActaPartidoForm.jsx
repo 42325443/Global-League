@@ -7,6 +7,15 @@ const leerRespuesta = async (response, mensaje) => {
   return data;
 };
 
+const formatearFechaHora = (valor) => {
+  if (!valor) return 'Horario pendiente';
+  const fecha = new Date(valor);
+  if (Number.isNaN(fecha.getTime())) return String(valor);
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  }).format(fecha);
+};
+
 const crearEventoVacio = (tipoPuntuacion = 'Goles') => ({
   idJugador: '', tipoEvento: tipoPuntuacion === 'Goles' ? 'Gol' : 'Punto',
   numeroPeriodo: '', minuto: '', valor: 1, observaciones: ''
@@ -151,41 +160,65 @@ export default function ActaPartidoForm({ idPartido, idArbitro = null, onClose, 
   }
 
   const partido = datos.partido;
+  const arbitrosAsignados = (datos.arbitros || []).map((arbitro) => (
+    `${arbitro.nombre} ${arbitro.apellido}${arbitro.rol ? ` · ${arbitro.rol}` : ''}`
+  ));
   return (
     <section className="relative max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-7">
+      <header className="sticky top-0 z-10 border-b border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 px-5 py-4 text-white shadow-lg sm:px-7">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-wider text-lime-700">Acta digital · {partido.nombreTorneo}</p>
-            <h2 className="mt-1 truncate text-xl font-bold text-slate-900">{partido.equipoLocal} <span className="text-slate-400">vs.</span> {partido.equipoVisitante}</h2>
-            <p className="mt-1 text-sm text-slate-500">{partido.nombreRonda || `Jornada ${partido.jornada}`} · Partido {partido.numeroPartido}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-lime-300">Acta digital · {partido.nombreTorneo}</p>
+            <h2 className="mt-1 truncate text-lg font-bold sm:text-xl">{partido.equipoLocal} <span className="text-slate-400">vs.</span> {partido.equipoVisitante}</h2>
+            <p className="mt-1 text-xs text-slate-300">{partido.nombreRonda || `Jornada ${partido.jornada}`} · Partido {partido.numeroPartido}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Cerrar acta" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+          <div className="flex shrink-0 items-start gap-2">
+            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${esCerrada ? 'border-emerald-300/30 bg-emerald-400/15 text-emerald-200' : datos.acta ? 'border-amber-300/30 bg-amber-300/15 text-amber-200' : 'border-slate-500/50 bg-white/10 text-slate-200'}`}>
+              {esCerrada ? 'Cerrada' : datos.acta ? 'Borrador' : 'Nueva acta'}
+            </span>
+            <button type="button" onClick={onClose} aria-label="Cerrar acta" className="-mr-2 -mt-2 rounded-lg p-2 text-slate-300 transition hover:bg-white/10 hover:text-white">✕</button>
+          </div>
         </div>
-        {esCerrada && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">Acta cerrada. El resultado ya fue aplicado al torneo.</p>}
+        <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-slate-200">
+            <span className="mr-1.5 font-bold uppercase tracking-wide text-slate-400">Fecha</span>{formatearFechaHora(partido.fechaHoraInicio)}
+          </span>
+          <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-slate-200">
+            <span className="mr-1.5 font-bold uppercase tracking-wide text-slate-400">Árbitro</span>{arbitrosAsignados.length ? arbitrosAsignados.join(' · ') : 'Sin árbitro asignado'}
+          </span>
+        </div>
+        {esCerrada && <p className="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100">Acta cerrada. El resultado ya fue aplicado al torneo.</p>}
       </header>
 
       <div className="space-y-6 px-5 py-5 sm:px-7">
         {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
         {mensaje && <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{mensaje}</p>}
-        <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex items-center justify-between gap-4">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="font-bold text-slate-900">Resultado final</h3>
-              <p className="text-xs text-slate-500">{partido.nombreDisciplina} · {partido.tipoPuntuacion}</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-700">Marcador oficial</p>
+              <h3 className="mt-0.5 text-sm font-bold text-slate-900">{partido.nombreDisciplina} · {partido.tipoPuntuacion}</h3>
             </div>
-            {esSets && <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">Sets ganados: {puntosPorSet.local} – {puntosPorSet.visitante}</span>}
+            {esSets && <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">Sets ganados: {puntosPorSet.local} – {puntosPorSet.visitante}</span>}
           </div>
-          <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-end gap-3">
-            <label className="min-w-0 text-sm font-semibold text-slate-700">
-              <span className="mb-1 block truncate">{partido.equipoLocal}</span>
-              <input type="number" min="0" max="999" value={esSets ? puntosPorSet.local : marcadorLocal} disabled={esSets || esCerrada} onChange={(event) => setMarcadorLocal(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-center text-2xl font-bold text-slate-900 outline-none focus:border-blue-500 disabled:bg-slate-100" />
-            </label>
-            <span className="pb-3 text-sm font-bold text-slate-400">–</span>
-            <label className="min-w-0 text-sm font-semibold text-slate-700">
-              <span className="mb-1 block truncate">{partido.equipoVisitante}</span>
-              <input type="number" min="0" max="999" value={esSets ? puntosPorSet.visitante : marcadorVisitante} disabled={esSets || esCerrada} onChange={(event) => setMarcadorVisitante(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-center text-2xl font-bold text-slate-900 outline-none focus:border-blue-500 disabled:bg-slate-100" />
-            </label>
+          <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-4">
+            <div className="min-w-0 rounded-xl border border-blue-100 bg-white p-2.5 text-center shadow-sm sm:p-4">
+              <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-sm font-extrabold text-blue-700 sm:h-11 sm:w-11 sm:text-base">
+                {partido.equipoLocal?.trim().charAt(0).toLocaleUpperCase() || 'L'}
+              </span>
+              <span className="mt-2 block text-[10px] font-bold uppercase tracking-wider text-blue-600">Local</span>
+              <p className="mt-0.5 min-h-9 break-words text-xs font-bold leading-4 text-slate-800 sm:text-sm">{partido.equipoLocal}</p>
+              <input type="number" min="0" max="999" aria-label={`Marcador de ${partido.equipoLocal}`} value={esSets ? puntosPorSet.local : marcadorLocal} disabled={esSets || esCerrada} onChange={(event) => setMarcadorLocal(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-center text-2xl font-extrabold tabular-nums text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white disabled:bg-slate-100 sm:text-3xl" />
+            </div>
+            <span className="text-base font-extrabold text-slate-300 sm:text-xl">VS</span>
+            <div className="min-w-0 rounded-xl border border-lime-100 bg-white p-2.5 text-center shadow-sm sm:p-4">
+              <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-lime-100 text-sm font-extrabold text-lime-700 sm:h-11 sm:w-11 sm:text-base">
+                {partido.equipoVisitante?.trim().charAt(0).toLocaleUpperCase() || 'V'}
+              </span>
+              <span className="mt-2 block text-[10px] font-bold uppercase tracking-wider text-lime-700">Visitante</span>
+              <p className="mt-0.5 min-h-9 break-words text-xs font-bold leading-4 text-slate-800 sm:text-sm">{partido.equipoVisitante}</p>
+              <input type="number" min="0" max="999" aria-label={`Marcador de ${partido.equipoVisitante}`} value={esSets ? puntosPorSet.visitante : marcadorVisitante} disabled={esSets || esCerrada} onChange={(event) => setMarcadorVisitante(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-center text-2xl font-extrabold tabular-nums text-slate-900 outline-none transition focus:border-lime-500 focus:bg-white disabled:bg-slate-100 sm:text-3xl" />
+            </div>
           </div>
           {esEliminatoria && Number(marcadorLocal) === Number(marcadorVisitante) && (
             <label className="mt-4 block text-sm font-semibold text-slate-700">

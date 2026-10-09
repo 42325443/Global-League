@@ -183,6 +183,20 @@ export default function Estadisticas() {
     (torneoFiltro === "Todos" || String(partido.torneoId) === torneoFiltro)
     && (deporteFiltro === "Todos" || partido.deporte === deporteFiltro)
   ));
+  const partidosCerradosTorneo = torneoSeleccionado
+    ? partidosCerrados.filter((partido) => String(partido.torneoId) === String(torneoSeleccionado.id))
+    : [];
+  const partidosDelBracket = detalleTorneoActual?.partidos || [];
+  const equiposDelBracket = new Set(partidosDelBracket.flatMap((partido) => ([
+    partido.idEquipoLocal ? `id:${partido.idEquipoLocal}` : partido.equipoLocal ? `nombre:${partido.equipoLocal}` : null,
+    partido.idEquipoVisitante ? `id:${partido.idEquipoVisitante}` : partido.equipoVisitante ? `nombre:${partido.equipoVisitante}` : null,
+  ])).filter(Boolean));
+  const equiposDelDetalle = esTorneoEliminatorio
+    ? equiposDelBracket.size
+    : (detalleTorneoActual?.posiciones || []).length;
+  const partidosResueltosDelBracket = partidosDelBracket.filter((partido) => (
+    partido.estado === "Finalizado" || partido.estado === "Pase libre"
+  )).length;
   const partidosJugados = partidosFiltrados.length;
   const marcadoresTotales = partidosFiltrados.reduce(
     (total, partido) => total + partido.marcadorLocal + partido.marcadorVisitante,
@@ -219,21 +233,23 @@ export default function Estadisticas() {
       {/* ENCABEZADO */}
       {/* ================================================= */}
 
-      <div>
-        <span className="text-sm text-lime-700 font-bold">
-          Rendimiento deportivo
-        </span>
-
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-r from-white via-white to-lime-50/70 px-5 py-5 shadow-sm sm:px-7">
+        <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">
+            <span className="inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-lime-700">
+              <span className="h-2 w-2 rounded-full bg-lime-500 ring-4 ring-lime-100" />
+              Rendimiento deportivo
+            </span>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
               Estadísticas
             </h1>
-
-            <p className="text-slate-500 text-sm font-semibold mt-1">
-              Consultá resultados cerrados y el rendimiento de tus equipos.
+            <p className="mt-1 max-w-2xl text-sm text-slate-500">
+              Consultá resultados, posiciones y rendimiento a partir de las actas cerradas.
             </p>
           </div>
+          <span className="max-w-full break-words rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-500 shadow-sm sm:max-w-sm sm:truncate">
+            {torneoFiltro === "Todos" ? "Todos los torneos" : torneoSeleccionado?.nombre}
+          </span>
         </div>
       </div>
 
@@ -604,11 +620,34 @@ export default function Estadisticas() {
         </div>
       </div>
       ) : (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <header className="border-b border-slate-200 p-5">
-            <p className="text-xs font-bold uppercase tracking-wide text-lime-700">{esTorneoEliminatorio ? "Cuadro eliminatorio" : "Tabla del torneo"}</p>
-            <h2 className="mt-1 text-lg font-bold text-slate-800">{torneoSeleccionado?.nombre}</h2>
-            <p className="mt-1 text-xs text-slate-500">{torneoSeleccionado?.deporte} · {torneoSeleccionado?.disciplina} · {torneoSeleccionado?.modalidad}</p>
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <header className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 px-5 py-5 text-white sm:px-7">
+            <div aria-hidden="true" className="pointer-events-none absolute -right-14 -top-24 h-56 w-56 rounded-full border border-white/10" />
+            <div aria-hidden="true" className="pointer-events-none absolute -right-2 -top-12 h-40 w-40 rounded-full border border-lime-300/10" />
+            <div className="relative">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-lime-300">{esTorneoEliminatorio ? "Cuadro eliminatorio" : "Tabla de posiciones"}</p>
+                <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-slate-200">{torneoSeleccionado?.modalidad}</span>
+              </div>
+              <h2 className="mt-1 break-words text-xl font-extrabold tracking-tight sm:text-2xl">{torneoSeleccionado?.nombre}</h2>
+              <p className="mt-1 text-xs text-slate-300">{torneoSeleccionado?.deporte} · {torneoSeleccionado?.disciplina}</p>
+              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
+                <div className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5">
+                  <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">Equipos</span>
+                  <strong className="mt-0.5 block text-lg tabular-nums text-white">{equiposDelDetalle}</strong>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5">
+                  <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">Actas cerradas</span>
+                  <strong className="mt-0.5 block text-lg tabular-nums text-white">{partidosCerradosTorneo.length}</strong>
+                </div>
+                <div className="col-span-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 sm:col-span-1">
+                  <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">{esTorneoEliminatorio ? "Enfrentamientos resueltos" : "Criterios de desempate"}</span>
+                  <strong className="mt-0.5 block text-lg tabular-nums text-white">
+                    {esTorneoEliminatorio ? `${partidosResueltosDelBracket}/${partidosDelBracket.length}` : "3"}
+                  </strong>
+                </div>
+              </div>
+            </div>
           </header>
 
           {errorDetalleActual && <p role="alert" className="m-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorDetalleActual}</p>}
