@@ -1,0 +1,396 @@
+{
+  "info": {
+    "_name": "Global League APIs",
+    "description": "Coleccion de tests de la API de Global League. Uso en Pipeline CI (Newman) despues de subir el backend, antes del load test. Variables: baseUrl.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "item": [
+      {
+        "name": "Auth",
+        "item": [
+          {
+            "name": "POST Autenticar",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"arbitro@global-league.com\",\n  \"password\": \"123456\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/login",
+                "host": ["{{baseUrl}"],
+                "path": ["auth", "login"]
+              }
+            }
+          },
+          {
+            "name": "POST Registrar arbitro",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"nombre\": \"Juana\",\n  \"apellido\": \"Lopez\",\n  \"email\": \"juana@global-league.com\",\n  \"password\": \"123456\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/registro",
+                "host": ["{{baseUrl}"],
+                "path": ["auth", "registro"]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Calendario",
+        "item": [
+          {
+            "name": "GET Calendario (partidos activos)",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/calendario",
+                "host": ["{{baseUrl}"],
+                "path": ["calendario"]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Partidos",
+        "item": [
+          {
+            "name": "GET Listado de partidos",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/partidos",
+                "host": ["{{baseUrl}"],
+                "path": ["partidos"]
+              }
+            }
+          },
+          {
+            "name": "POST Crear partido",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"equipoLocal\": \"Atlas\",\n  \"equipoVisitante\": \"Boca\",\n  \"fechaHoraInicio\": \"2026-10-16T20:30:00\",\n  \"estadio\": \"Albos Haber\",\n  \"arbitroId\": 1
+}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/partidos",
+                "host": ["{{baseUrl}"],
+                "path": ["partidos"]
+              }
+            }
+          },
+          {
+            "name": "GET Partido por ID",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/partidos/10",
+                "host": ["{{baseUrl}"],
+                "path": ["partidos", "10"]
+              }
+            }
+          },
+          {
+            "name": "PUT Actualizar estado de partido",
+            "request": {
+              "method": "PUT",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"estado\": \"En curso\",\n  \"marcadorLocal\": 1,\
+  \"marcadorVisitante\": 1
+}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/partidos/10",
+                "host": ["{{baseUrl}"],
+                "path": ["partidos", "10"]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Actas digitales",
+        "item": [
+          {
+            "name": "GET Acta del partido (borrador)",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/partidos/10/acta",
+                "host": ["{{baseUrl}"],
+                "path": ["partidos", "10", "acta"]
+              }
+            }
+          },
+          {
+            "name": "POST Guardar borrador de acta",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"marcadorLocal\": 0,\
+  \"marcadorVisitante\": 0,\
+  \"observaciones\": \"Primer intento\",\n  \"idArbitro\": 1
+}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/partidos/10/acta/borrador",
+                "host": ["{{baseUrl}"],
+                "path": ["partidos", "10", "acta", "borrador"]
+              }
+            }
+          },
+          {
+            "name": "POST Firmar acta",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"marcadorLocal\": 1,\
+  \"marcadorVisitante\": 1,\
+  \"observaciones\": \"Finalizado\",\n  \"idArbitro\": 1,\
+  \"conformidad\": true
+}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/partidos/10/acta/firmar",
+                "host": ["{{baseUrl}"],
+                "path": ["partidos", "10", "acta", "firmar"]
+              }
+            }
+          },
+          {
+            "name": "GET Incidencias del acta",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/partidos/10/acta/incidencias",
+                "host": ["{{baseUrl}"],
+                "path": ["partidos", "10", "acta", "incidencias"]
+              }
+            }
+          },
+          {
+            "name": "POST Crear incidencia",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"minuto\": 23,\
+  \"equipo\": \"Atlas\",\n  \"tipoEvento\": \"Gol\",\n  \"idJugador\": 5,\
+  \"observaciones\": \"Gol de cabeza\""
+              },
+              "url": {
+                "raw": "{{baseUrl}}/partidos/10/acta/incidencias",
+                "host": ["{{baseUrl}"],
+                "path": ["partidos", "10", "acta", "incidencias"]
+              }
+            }
+          },
+          {
+            "name": "DELETE Eliminar incidencia",
+            "request": {
+              "method": "DELETE",
+              "url": {
+                "raw": "{{baseUrl}}/partidos/10/acta/incidencias/1",
+                "host": ["{{baseUrl}"],
+                "path": ["partidos", "10", "acta", "incidencias", "1"]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Torneos / posiciones",
+        "item": [
+          {
+            "name": "GET Tabla de posiciones",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/torneos/1/posiciones",
+                "host": ["{{baseUrl}"],
+                "path": ["torneos", "1", "posiciones"]
+              }
+            }
+          },
+          {
+            "name": "GET Partidos del torneo (bracket)",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/torneos/1/partidos",
+                "host": ["{{baseUrl}"],
+                "path": ["torneos", "1", "partidos"]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Equipos",
+        "item": [
+          {
+            "name": "GET Listado de equipos",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/equipos",
+                "host": ["{{baseUrl}"],
+                "path": ["equipos"]
+              }
+            }
+          },
+          {
+            "name": "POST Crear equipo",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"nombre\": \"Huracan\",\n  \"deporte\": \"Futebol\",\n  \"fundacion\": 1901
+}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/equipos",
+                "host": ["{{baseUrl}"],
+                "path": ["equipos"]
+              }
+            }
+          },
+          {
+            "name": "PUT Actualizar equipo",
+            "request": {
+              "method": "PUT",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"nombre\": \"Huracan\",\n  \"fundacion\": 1901
+}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/equipos/1",
+                "host": ["{{baseUrl}"],
+                "path": ["equipos", "1"]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Jugadores",
+        "item": [
+          {
+            "name": "GET Jugadores por equipo",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/jugadores?equipoId=1",
+                "host": ["{{baseUrl}"],
+                "path": ["jugadores"]
+              }
+            }
+          },
+          {
+            "name": "POST Crear jugador",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"nombre\": \"Agustin\",\n  \"apellido\": \"Gomez\",\n  \"posicion\": \"delantero\",\n  \"numero\": 10,\
+  \"equipoId\": 1
+}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/jugadores",
+                "host": ["{{baseUrl}"],
+                "path": ["jugadores"]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Arbitros",
+        "item": [
+          {
+            "name": "GET Arbitros",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/arbitros",
+                "host": ["{{baseUrl}"],
+                "path": ["arbitros"]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
