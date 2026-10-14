@@ -165,10 +165,85 @@ jobs:
     runs-on: ubuntu-latest
     needs: postman
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: global_league
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+    env:
+      PORT: 3000
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: global_league
+      AUTH_SECRET: ci-test-secret
+      BASE_URL: http://localhost:3000/api
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # 1. Dependencias del backend para poder encenderlo
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Instalar cliente MySQL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mysql-client
+
+      # 2. Sembrar esquema + catalogos + torneo de prueba (k6 consulta la API,
+      #    que necesita tablas; si no, /calendario daria 500 y romperia el umbral).
+      - name: Sembrar esquema y catalogos en MySQL
+        run: |
+          echo "Esperando a que MySQL acepte conexiones..."
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -uroot -proot --silent >/dev/null 2>&1; then
+              echo "MySQL listo."
+              break
+            fi
+            echo "  ...intento $i/30"
+            sleep 2
+          done
+          mysql -h 127.0.0.1 -uroot -proot < database/schema.sql
+          mysql -h 127.0.0.1 -uroot -proot global_league < database/seed.sql
+          mysql -h 127.0.0.1 -uroot -proot global_league < tests/test-db-seed.sql
+          echo "Base de prueba sembrada."
+
+      # 3. Levantar el backend y esperar a que responda de verdad (no sleep fijo)
+      - name: Start Backend API Server for Load Test
+        run: |
+          npm start &
+          echo "Esperando a que la API responda..."
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://localhost:3000/api/catalogos/deportes; then
+              echo "Backend listo tras ~$((i*2))s."
+              exit 0
+            fi
+            echo "  ...intento $i/30"
+            sleep 2
+          done
+          echo "El backend no respondio a tiempo."
+          exit 1
+        working-directory: backend
+
+      # 4. Configurar k6 y ejecutar el script contra el localhost activo
       - uses: grafana/setup-k6-action@v1
-      - run: BASE_URL=http://localhost:3000/api k6 run --summary-export=test-reports/k6-summary.json scripts/load-test.js
+
+      - name: Run k6 Load Test
+        run: k6 run --summary-export=test-reports/k6-summary.json scripts/load-test.js
+
+      # 5. Guardar los reportes de rendimiento
       - uses: actions/upload-artifact@v4
         if: always()
         with:
