@@ -130,7 +130,8 @@ jobs:
           done
           mysql -h 127.0.0.1 -uroot -proot < database/schema.sql
           mysql -h 127.0.0.1 -uroot -proot global_league < database/seed.sql
-          echo "Esquema y catalogos sembrados correctamente."
+          mysql -h 127.0.0.1 -uroot -proot global_league < tests/test-db-seed.sql
+          echo "Esquema, catalogos y torneo de prueba sembrados correctamente."
 
       - name: Levantar el backend en segundo plano
         run: |
