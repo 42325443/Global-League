@@ -1,0 +1,2 @@
+# Los reportes JUnit/HTML/JSON del CI se generan aqui (vitest, newman, k6).
+# Este archivo solo garantiza que el directorio exista en el repo.
