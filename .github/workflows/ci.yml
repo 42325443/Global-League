@@ -202,8 +202,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq mysql-client
 
-      # 2. Sembrar esquema + catalogos + torneo de prueba (k6 consulta la API,
-      #    que necesita tablas; si no, /calendario daria 500 y romperia el umbral).
+      # 2. Sembrar esquema + catalogos + torneo de prueba (JMeter consulta la API,
+      #    que necesita tablas; si no, /calendario daria 500 y romperia el smoke).
       - name: Sembrar esquema y catalogos en MySQL
         run: |
           echo "Esperando a que MySQL acepte conexiones..."
@@ -237,15 +237,37 @@ jobs:
           exit 1
         working-directory: backend
 
-      # 4. Configurar k6 y ejecutar el script contra el localhost activo
-      - uses: grafana/setup-k6-action@v1
+      # 4. Instalar Java (JMeter lo requiere) y Apache JMeter
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
-      - name: Run k6 Load Test
-        run: k6 run --summary-export=test-reports/k6-summary.json scripts/load-test.js
+      - name: Instalar Apache JMeter
+        run: |
+          JMETER_VERSION=5.6.3
+          curl -sSL "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz" -o /tmp/jmeter.tgz
+          tar -xzf /tmp/jmeter.tgz -C "$HOME"
+          echo "$HOME/apache-jmeter-${JMETER_VERSION}/bin" >> $GITHUB_PATH
+          echo "JMETER_HOME=$HOME/apache-jmeter-${JMETER_VERSION}" >> $GITHUB_ENV
 
-      # 5. Guardar los reportes de rendimiento
+      # 5. Ejecutar el plan JMeter en modo headless contra el backend activo.
+      #    El .jmx lee -Jhost / -Jport (defaults localhost:3000).
+      - name: Run JMeter Load Test
+        run: |
+          jmeter -n \
+            -t jmeter/GlobalLeague_LoadTest.jmx \
+            -Jhost=localhost -Jport=3000 \
+            -l test-reports/jmeter-results.jtl \
+            -e -o test-reports/jmeter-report \
+            -Jjmeterengine.force.system.exit=true
+
+      # 6. Guardar los reportes de rendimiento (JTL crudo + dashboard HTML)
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: k6-summary
-          path: test-reports/k6-summary.json
+          name: jmeter-report
+          path: |
+            test-reports/jmeter-results.jtl
+            test-reports/jmeter-report
