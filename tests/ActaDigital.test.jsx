@@ -30,6 +30,15 @@ const actaBorrador = {
 
 const calendarioOk = () => apiFetch.mockResolvedValueOnce(ok([partido]));
 
+
+const cargarActaDelPartido = async () => {
+  const select = await screen.findByRole('combobox');
+  await waitFor(() => expect(select).toBeEnabled());
+  await userEvent.selectOptions(select, '10');
+  await screen.findByRole('heading', { name: /Atlas\s*vs\s*Boca/ });
+  return select;
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -62,10 +71,7 @@ describe('ActaDigital', () => {
     calendarioOk();
     apiFetch.mockResolvedValueOnce(ok(actaBorrador));
     render(<ActaDigital />);
-    const select = await screen.findByRole('combobox');
-    await userEvent.selectOptions(select, '10');
-    // El heading parte el texto con un <span> para "vs": se busca por rol.
-    expect(await screen.findByRole('heading', { name: /Atlas\s*vs\s*Boca/ })).toBeInTheDocument();
+    await cargarActaDelPartido();
     expect(apiFetch).toHaveBeenCalledWith('/partidos/10/acta');
   });
 
@@ -73,7 +79,7 @@ describe('ActaDigital', () => {
     calendarioOk();
     apiFetch.mockResolvedValueOnce(ok(actaBorrador));
     render(<ActaDigital />);
-    await userEvent.selectOptions(await screen.findByRole('combobox'), '10');
+    await cargarActaDelPartido();
     const botonFirmar = await screen.findByRole('button', { name: /firmar y finalizar acta/i });
     expect(botonFirmar).toBeDisabled();
   });
@@ -82,7 +88,7 @@ describe('ActaDigital', () => {
     calendarioOk();
     apiFetch.mockResolvedValueOnce(ok(actaBorrador));
     render(<ActaDigital />);
-    await userEvent.selectOptions(await screen.findByRole('combobox'), '10');
+    await cargarActaDelPartido();
     const botonFirmar = await screen.findByRole('button', { name: /firmar y finalizar acta/i });
     await userEvent.click(screen.getByRole('checkbox'));
     expect(botonFirmar).toBeEnabled();
@@ -92,7 +98,7 @@ describe('ActaDigital', () => {
     calendarioOk();
     apiFetch.mockResolvedValueOnce(ok(actaBorrador)); // GET acta inicial
     render(<ActaDigital />);
-    await userEvent.selectOptions(await screen.findByRole('combobox'), '10');
+    await cargarActaDelPartido();
 
     apiFetch.mockResolvedValueOnce(ok({ ...actaBorrador, message: 'Borrador guardado correctamente.' }));
     await userEvent.click(await screen.findByRole('button', { name: /guardar borrador/i }));
@@ -114,7 +120,7 @@ describe('ActaDigital', () => {
     calendarioOk();
     apiFetch.mockResolvedValueOnce(ok(actaBorrador));
     render(<ActaDigital />);
-    await userEvent.selectOptions(await screen.findByRole('combobox'), '10');
+    await cargarActaDelPartido();
     await userEvent.click(screen.getByRole('checkbox'));
 
     apiFetch.mockResolvedValueOnce(ok({ ...actaBorrador, acta: { ...actaBorrador.acta, estado: 'Firmada' } }));
