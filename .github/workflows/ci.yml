@@ -252,8 +252,9 @@ jobs:
           echo "$HOME/apache-jmeter-${JMETER_VERSION}/bin" >> $GITHUB_PATH
           echo "JMETER_HOME=$HOME/apache-jmeter-${JMETER_VERSION}" >> $GITHUB_ENV
 
-      # 5. Ejecutar el plan JMeter en modo headless contra el backend activo.
-      #    El .jmx lee -Jhost / -Jport (defaults localhost:3000).
+      # 5. Ejecutar los planes JMeter en modo headless contra el backend activo.
+      #    Los .jmx leen -Jhost / -Jport (defaults localhost:3000) y los nuevos
+      #    planes leen -Jusers / -Jduration / -Jp95max (+ -Jcsv para el CSV).
       - name: Run JMeter Load Test
         run: |
           jmeter -n \
@@ -261,6 +262,13 @@ jobs:
             -Jhost=localhost -Jport=3000 \
             -l test-reports/jmeter-results.jtl \
             -e -o test-reports/jmeter-report \
+            -Jjmeterengine.force.system.exit=true
+          jmeter -n \
+            -t jmeter/GlobalLeague_StressTest.jmx \
+            -Jhost=localhost -Jport=3000 \
+            -Jusers=20 -Jduration=60 -Jramp=10 -Jp95max=3000 \
+            -l test-reports/jmeter-stress-results.jtl \
+            -e -o test-reports/jmeter-stress-report \
             -Jjmeterengine.force.system.exit=true
 
       # 6. Guardar los reportes de rendimiento (JTL crudo + dashboard HTML)
@@ -271,3 +279,5 @@ jobs:
           path: |
             test-reports/jmeter-results.jtl
             test-reports/jmeter-report
+            test-reports/jmeter-stress-results.jtl
+            test-reports/jmeter-stress-report
