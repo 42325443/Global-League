@@ -15,17 +15,18 @@ export const options = {
   },
 };
 
-export function setup() {
-  const res = http.post(
+// El login se hace por cada VU (default), NO en setup(): en k6 las cookies de
+// setup() no se comparten con las VUs y /calendario exige sesion (401). Al
+// autenticar dentro del runtime de la VU, el jar de cookies queda disponible
+// para las peticiones siguientes de esa misma VU.
+export default function () {
+  const loginRes = http.post(
     `${BASE_URL}/auth/login`,
     JSON.stringify({ email: 'juana@global-league.com', password: 'Secreta123' }),
     { headers: { 'Content-Type': 'application/json' } },
   );
-  // Si el seed no existe, el flujo continua igual (checks toleran 4xx en setup).
-  return { status: res.status };
-}
+  check(loginRes, { 'login 200': (r) => r.status === 200 });
 
-export default function () {
   const cal = http.get(`${BASE_URL}/calendario`);
   check(cal, { 'calendario 200': (r) => r.status === 200 });
 
@@ -34,3 +35,4 @@ export default function () {
 
   sleep(1);
 }
+

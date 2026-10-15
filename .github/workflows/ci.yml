@@ -11,8 +11,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -23,14 +23,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
       - run: npm ci
       - run: npx vitest run --coverage --reporter=junit --outputFile=test-reports/vitest-frontend.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: vitest-frontend
@@ -40,8 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -51,7 +51,7 @@ jobs:
       # NOTA: no se usa `npm test` (placeholder que falla); se invoca vitest directo.
       - run: npx vitest run --coverage --reporter=junit --outputFile=../test-reports/vitest-backend.xml
         working-directory: backend
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: vitest-backend
@@ -71,31 +71,88 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: global_league_test
+          # El schema.sql crea/usa la base `global_league`, por eso se alinea aquí.
+          MYSQL_DATABASE: global_league
         ports:
           - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping -h localhost"
           --health-interval=10s --health-timeout=5s --health-retries=5
+    env:
+      PORT: 3000
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: global_league
+      AUTH_SECRET: ci-test-secret
+      BASE_URL: http://localhost:3000/api
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
-      - run: npm ci
+
+      - name: Instalar dependencias del root y backend
+        run: |
+          npm ci
+          npm ci --prefix backend
+
+      # Red de seguridad: garantiza LF en TODOS los scripts .sh.
+      # (.gitattributes ya normaliza en el checkout, pero esto cubre cualquier
+      # editor/OS que reintroduzca CRLF y evita el error "pipefail: invalid option name".)
+      - name: Normalizar finales de linea de los scripts (CRLF a LF)
+        run: |
+          for f in scripts/*.sh; do
+            sed -i 's/\r$//' "$f"
+            chmod +x "$f"
+          done
+
+      - name: Instalar Newman (CLI de Postman)
+        run: npm install -g newman
+
+      - name: Instalar cliente MySQL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mysql-client
+
+      - name: Sembrar esquema y catalogos en MySQL
+        run: |
+          echo "Esperando a que MySQL acepte conexiones..."
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -uroot -proot --silent >/dev/null 2>&1; then
+              echo "MySQL listo."
+              break
+            fi
+            echo "  ...intento $i/30"
+            sleep 2
+          done
+          mysql -h 127.0.0.1 -uroot -proot < database/schema.sql
+          mysql -h 127.0.0.1 -uroot -proot global_league < database/seed.sql
+          mysql -h 127.0.0.1 -uroot -proot global_league < tests/test-db-seed.sql
+          echo "Esquema, catalogos y torneo de prueba sembrados correctamente."
+
+      - name: Levantar el backend en segundo plano
+        run: |
+          npm start &
+          echo "Esperando a que la API responda..."
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://localhost:3000/api/catalogos/deportes; then
+              echo "Backend listo tras ~$((i*2))s."
+              exit 0
+            fi
+            echo "  ...intento $i/30"
+            sleep 2
+          done
+          echo "El backend no respondio a tiempo."
+          exit 1
         working-directory: backend
-      - run: npm install -g newman
-      - run: bash scripts/run-newman.sh
-        env:
-          BASE_URL: http://localhost:3000/api
-          DB_HOST: 127.0.0.1
-          DB_USER: root
-          DB_PASSWORD: root
-          DB_NAME: global_league_test
-          AUTH_SECRET: ci-test-secret
-      - uses: actions/upload-artifact@v4
+
+      - name: Ejecutar pruebas de Postman con Newman
+        run: bash scripts/run-newman.sh
+
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: newman-reports
@@ -103,16 +160,124 @@ jobs:
             test-reports/newman.xml
             test-reports/newman.html
 
+
   load-test:
     runs-on: ubuntu-latest
     needs: postman
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: global_league
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+    env:
+      PORT: 3000
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: global_league
+      AUTH_SECRET: ci-test-secret
+      BASE_URL: http://localhost:3000/api
     steps:
-      - uses: actions/checkout@v4
-      - uses: grafana/setup-k6-action@v1
-      - run: BASE_URL=http://localhost:3000/api k6 run --summary-export=test-reports/k6-summary.json scripts/load-test.js
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      # 1. Dependencias del backend para poder encenderlo
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Instalar cliente MySQL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mysql-client
+
+      # 2. Sembrar esquema + catalogos + torneo de prueba (JMeter consulta la API,
+      #    que necesita tablas; si no, /calendario daria 500 y romperia el smoke).
+      - name: Sembrar esquema y catalogos en MySQL
+        run: |
+          echo "Esperando a que MySQL acepte conexiones..."
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -uroot -proot --silent >/dev/null 2>&1; then
+              echo "MySQL listo."
+              break
+            fi
+            echo "  ...intento $i/30"
+            sleep 2
+          done
+          mysql -h 127.0.0.1 -uroot -proot < database/schema.sql
+          mysql -h 127.0.0.1 -uroot -proot global_league < database/seed.sql
+          mysql -h 127.0.0.1 -uroot -proot global_league < tests/test-db-seed.sql
+          echo "Base de prueba sembrada."
+
+      # 3. Levantar el backend y esperar a que responda de verdad (no sleep fijo)
+      - name: Start Backend API Server for Load Test
+        run: |
+          npm start &
+          echo "Esperando a que la API responda..."
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://localhost:3000/api/catalogos/deportes; then
+              echo "Backend listo tras ~$((i*2))s."
+              exit 0
+            fi
+            echo "  ...intento $i/30"
+            sleep 2
+          done
+          echo "El backend no respondio a tiempo."
+          exit 1
+        working-directory: backend
+
+      # 4. Instalar Java (JMeter lo requiere) y Apache JMeter
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Instalar Apache JMeter
+        run: |
+          JMETER_VERSION=5.6.3
+          curl -sSL "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz" -o /tmp/jmeter.tgz
+          tar -xzf /tmp/jmeter.tgz -C "$HOME"
+          echo "$HOME/apache-jmeter-${JMETER_VERSION}/bin" >> $GITHUB_PATH
+          echo "JMETER_HOME=$HOME/apache-jmeter-${JMETER_VERSION}" >> $GITHUB_ENV
+
+      # 5. Ejecutar los planes JMeter en modo headless contra el backend activo.
+      #    Los .jmx leen -Jhost / -Jport (defaults localhost:3000) y los nuevos
+      #    planes leen -Jusers / -Jduration / -Jp95max (+ -Jcsv para el CSV).
+      - name: Run JMeter Load Test
+        run: |
+          jmeter -n \
+            -t jmeter/GlobalLeague_LoadTest.jmx \
+            -Jhost=localhost -Jport=3000 \
+            -l test-reports/jmeter-results.jtl \
+            -e -o test-reports/jmeter-report \
+            -Jjmeterengine.force.system.exit=true
+          jmeter -n \
+            -t jmeter/GlobalLeague_StressTest.jmx \
+            -Jhost=localhost -Jport=3000 \
+            -Jusers=20 -Jduration=60 -Jramp=10 -Jp95max=3000 \
+            -l test-reports/jmeter-stress-results.jtl \
+            -e -o test-reports/jmeter-stress-report \
+            -Jjmeterengine.force.system.exit=true
+
+      # 6. Guardar los reportes de rendimiento (JTL crudo + dashboard HTML)
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: k6-summary
-          path: test-reports/k6-summary.json
+          name: jmeter-report
+          path: |
+            test-reports/jmeter-results.jtl
+            test-reports/jmeter-report
+            test-reports/jmeter-stress-results.jtl
+            test-reports/jmeter-stress-report

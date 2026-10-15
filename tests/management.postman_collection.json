@@ -1,396 +1,603 @@
 {
   "info": {
-    "_name": "Global League APIs",
-    "description": "Coleccion de tests de la API de Global League. Uso en Pipeline CI (Newman) despues de subir el backend, antes del load test. Variables: baseUrl.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "item": [
-      {
-        "name": "Auth",
-        "item": [
-          {
-            "name": "POST Autenticar",
-            "request": {
-              "method": "POST",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": {
-                "mode": "raw",
-                "raw": "{\n  \"email\": \"arbitro@global-league.com\",\n  \"password\": \"123456\"\n}"
-              },
-              "url": {
-                "raw": "{{baseUrl}}/auth/login",
-                "host": ["{{baseUrl}"],
-                "path": ["auth", "login"]
+    "_postman_id": "global-league-management",
+    "name": "Global League APIs",
+    "description": "Smoke E2E de la API de Global League para CI (Newman). Requiere backend arriba y BD sembrada. Variable: baseUrl. El registro/login fija la cookie de sesion que el resto de requests reutiliza.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" },
+    { "key": "equipoLocalId", "value": "" },
+    { "key": "equipoVisitanteId", "value": "" },
+    { "key": "torneoId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST Registrar organizador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Registro responde 201 (creado) o 409 (ya existia)', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  var usuario = pm.response.json().usuario;",
+                  "  pm.test('Devuelve el usuario creado', function () {",
+                  "    pm.expect(usuario).to.be.an('object');",
+                  "    pm.expect(usuario.email).to.eql('juana@global-league.com');",
+                  "  });",
+                  "}"
+                ]
               }
             }
-          },
-          {
-            "name": "POST Registrar arbitro",
-            "request": {
-              "method": "POST",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": {
-                "mode": "raw",
-                "raw": "{\n  \"nombre\": \"Juana\",\n  \"apellido\": \"Lopez\",\n  \"email\": \"juana@global-league.com\",\n  \"password\": \"123456\"\n}"
-              },
-              "url": {
-                "raw": "{{baseUrl}}/auth/registro",
-                "host": ["{{baseUrl}"],
-                "path": ["auth", "registro"]
-              }
-            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Juana\",\n  \"apellido\": \"Lopez\",\n  \"email\": \"juana@global-league.com\",\n  \"password\": \"Secreta123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/registro", "host": ["{{baseUrl}}"], "path": ["auth", "registro"] }
           }
-        ]
-      },
-      {
-        "name": "Calendario",
-        "item": [
-          {
-            "name": "GET Calendario (partidos activos)",
-            "request": {
-              "method": "GET",
-              "url": {
-                "raw": "{{baseUrl}}/calendario",
-                "host": ["{{baseUrl}"],
-                "path": ["calendario"]
+        },
+        {
+          "name": "POST Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login exitoso con cookie de sesion', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.usuario).to.be.an('object');",
+                  "  pm.expect(json.usuario.email).to.eql('juana@global-league.com');",
+                  "});"
+                ]
               }
             }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"juana@global-league.com\",\n  \"password\": \"Secreta123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
           }
-        ]
-      },
-      {
-        "name": "Partidos",
-        "item": [
-          {
-            "name": "GET Listado de partidos",
-            "request": {
-              "method": "GET",
-              "url": {
-                "raw": "{{baseUrl}}/partidos",
-                "host": ["{{baseUrl}"],
-                "path": ["partidos"]
+        },
+        {
+          "name": "GET Sesion actual (requiere auth)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La cookie de sesion es valida', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().usuario.email).to.eql('juana@global-league.com');",
+                  "});"
+                ]
               }
             }
-          },
-          {
-            "name": "POST Crear partido",
-            "request": {
-              "method": "POST",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": {
-                "mode": "raw",
-                "raw": "{\n  \"equipoLocal\": \"Atlas\",\n  \"equipoVisitante\": \"Boca\",\n  \"fechaHoraInicio\": \"2026-10-16T20:30:00\",\n  \"estadio\": \"Albos Haber\",\n  \"arbitroId\": 1
-}"
-              },
-              "url": {
-                "raw": "{{baseUrl}}/partidos",
-                "host": ["{{baseUrl}"],
-                "path": ["partidos"]
-              }
-            }
-          },
-          {
-            "name": "GET Partido por ID",
-            "request": {
-              "method": "GET",
-              "url": {
-                "raw": "{{baseUrl}}/partidos/10",
-                "host": ["{{baseUrl}"],
-                "path": ["partidos", "10"]
-              }
-            }
-          },
-          {
-            "name": "PUT Actualizar estado de partido",
-            "request": {
-              "method": "PUT",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": {
-                "mode": "raw",
-                "raw": "{\n  \"estado\": \"En curso\",\n  \"marcadorLocal\": 1,\
-  \"marcadorVisitante\": 1
-}"
-              },
-              "url": {
-                "raw": "{{baseUrl}}/partidos/10",
-                "host": ["{{baseUrl}"],
-                "path": ["partidos", "10"]
-              }
-            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
           }
-        ]
-      },
-      {
-        "name": "Actas digitales",
-        "item": [
-          {
-            "name": "GET Acta del partido (borrador)",
-            "request": {
-              "method": "GET",
-              "url": {
-                "raw": "{{baseUrl}}/partidos/10/acta",
-                "host": ["{{baseUrl}"],
-                "path": ["partidos", "10", "acta"]
+        }
+      ]
+    },
+    {
+      "name": "Catalogos (publicos)",
+      "item": [
+        {
+          "name": "GET Deportes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Catalogo de deportes sembrado', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json).to.be.an('array');",
+                  "  pm.expect(json.length).to.be.at.least(3);",
+                  "});"
+                ]
               }
             }
-          },
-          {
-            "name": "POST Guardar borrador de acta",
-            "request": {
-              "method": "POST",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": {
-                "mode": "raw",
-                "raw": "{\n  \"marcadorLocal\": 0,\
-  \"marcadorVisitante\": 0,\
-  \"observaciones\": \"Primer intento\",\n  \"idArbitro\": 1
-}"
-              },
-              "url": {
-                "raw": "{{baseUrl}}/partidos/10/acta/borrador",
-                "host": ["{{baseUrl}"],
-                "path": ["partidos", "10", "acta", "borrador"]
-              }
-            }
-          },
-          {
-            "name": "POST Firmar acta",
-            "request": {
-              "method": "POST",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": {
-                "mode": "raw",
-                "raw": "{\n  \"marcadorLocal\": 1,\
-  \"marcadorVisitante\": 1,\
-  \"observaciones\": \"Finalizado\",\n  \"idArbitro\": 1,\
-  \"conformidad\": true
-}"
-              },
-              "url": {
-                "raw": "{{baseUrl}}/partidos/10/acta/firmar",
-                "host": ["{{baseUrl}"],
-                "path": ["partidos", "10", "acta", "firmar"]
-              }
-            }
-          },
-          {
-            "name": "GET Incidencias del acta",
-            "request": {
-              "method": "GET",
-              "url": {
-                "raw": "{{baseUrl}}/partidos/10/acta/incidencias",
-                "host": ["{{baseUrl}"],
-                "path": ["partidos", "10", "acta", "incidencias"]
-              }
-            }
-          },
-          {
-            "name": "POST Crear incidencia",
-            "request": {
-              "method": "POST",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": {
-                "mode": "raw",
-                "raw": "{\n  \"minuto\": 23,\
-  \"equipo\": \"Atlas\",\n  \"tipoEvento\": \"Gol\",\n  \"idJugador\": 5,\
-  \"observaciones\": \"Gol de cabeza\""
-              },
-              "url": {
-                "raw": "{{baseUrl}}/partidos/10/acta/incidencias",
-                "host": ["{{baseUrl}"],
-                "path": ["partidos", "10", "acta", "incidencias"]
-              }
-            }
-          },
-          {
-            "name": "DELETE Eliminar incidencia",
-            "request": {
-              "method": "DELETE",
-              "url": {
-                "raw": "{{baseUrl}}/partidos/10/acta/incidencias/1",
-                "host": ["{{baseUrl}"],
-                "path": ["partidos", "10", "acta", "incidencias", "1"]
-              }
-            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/catalogos/deportes", "host": ["{{baseUrl}}"], "path": ["catalogos", "deportes"] }
           }
-        ]
-      },
-      {
-        "name": "Torneos / posiciones",
-        "item": [
-          {
-            "name": "GET Tabla de posiciones",
-            "request": {
-              "method": "GET",
-              "url": {
-                "raw": "{{baseUrl}}/torneos/1/posiciones",
-                "host": ["{{baseUrl}"],
-                "path": ["torneos", "1", "posiciones"]
+        },
+        {
+          "name": "GET Disciplinas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Catalogo de disciplinas disponible', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
               }
             }
-          },
-          {
-            "name": "GET Partidos del torneo (bracket)",
-            "request": {
-              "method": "GET",
-              "url": {
-                "raw": "{{baseUrl}}/torneos/1/partidos",
-                "host": ["{{baseUrl}"],
-                "path": ["torneos", "1", "partidos"]
-              }
-            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/catalogos/disciplinas", "host": ["{{baseUrl}}"], "path": ["catalogos", "disciplinas"] }
           }
-        ]
-      },
-      {
-        "name": "Equipos",
-        "item": [
-          {
-            "name": "GET Listado de equipos",
-            "request": {
-              "method": "GET",
-              "url": {
-                "raw": "{{baseUrl}}/equipos",
-                "host": ["{{baseUrl}"],
-                "path": ["equipos"]
+        },
+        {
+          "name": "GET Formatos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Catalogo de formatos (Liga + Eliminacion)', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json).to.be.an('array');",
+                  "  pm.expect(json.length).to.be.at.least(2);",
+                  "});"
+                ]
               }
             }
-          },
-          {
-            "name": "POST Crear equipo",
-            "request": {
-              "method": "POST",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": {
-                "mode": "raw",
-                "raw": "{\n  \"nombre\": \"Huracan\",\n  \"deporte\": \"Futebol\",\n  \"fundacion\": 1901
-}"
-              },
-              "url": {
-                "raw": "{{baseUrl}}/equipos",
-                "host": ["{{baseUrl}"],
-                "path": ["equipos"]
-              }
-            }
-          },
-          {
-            "name": "PUT Actualizar equipo",
-            "request": {
-              "method": "PUT",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": {
-                "mode": "raw",
-                "raw": "{\n  \"nombre\": \"Huracan\",\n  \"fundacion\": 1901
-}"
-              },
-              "url": {
-                "raw": "{{baseUrl}}/equipos/1",
-                "host": ["{{baseUrl}"],
-                "path": ["equipos", "1"]
-              }
-            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/catalogos/formatos", "host": ["{{baseUrl}}"], "path": ["catalogos", "formatos"] }
           }
-        ]
-      },
-      {
-        "name": "Jugadores",
-        "item": [
-          {
-            "name": "GET Jugadores por equipo",
-            "request": {
-              "method": "GET",
-              "url": {
-                "raw": "{{baseUrl}}/jugadores?equipoId=1",
-                "host": ["{{baseUrl}"],
-                "path": ["jugadores"]
+        }
+      ]
+    },
+
+    {
+      "name": "Equipos",
+      "item": [
+        {
+          "name": "POST Crear equipo local",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Equipo local creado (201) o ya existente (409)', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "  if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    var id = json.idEquipo || json.id;",
+                  "    pm.expect(id).to.be.a('number');",
+                  "    pm.collectionVariables.set('equipoLocalId', id);",
+                  "  }",
+                  "});"
+                ]
               }
             }
-          },
-          {
-            "name": "POST Crear jugador",
-            "request": {
-              "method": "POST",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": {
-                "mode": "raw",
-                "raw": "{\n  \"nombre\": \"Agustin\",\n  \"apellido\": \"Gomez\",\n  \"posicion\": \"delantero\",\n  \"numero\": 10,\
-  \"equipoId\": 1
-}"
-              },
-              "url": {
-                "raw": "{{baseUrl}}/jugadores",
-                "host": ["{{baseUrl}"],
-                "path": ["jugadores"]
-              }
-            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombreEquipo\": \"Atlas\",\n  \"idDisciplina\": 1,\n  \"localidad\": \"Guadalajara\",\n  \"capitan\": { \"nombre\": \"Juan\", \"apellido\": \"Perez\", \"dni\": \"11111111\" },\n  \"jugadores\": [\n    { \"nombre\": \"Juan\", \"apellido\": \"Perez\", \"dni\": \"11111111\" },\n    { \"nombre\": \"Luis\", \"apellido\": \"Gomez\", \"dni\": \"22222222\" }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/equipos", "host": ["{{baseUrl}}"], "path": ["equipos"] }
           }
-        ]
-      },
-      {
-        "name": "Arbitros",
-        "item": [
-          {
-            "name": "GET Arbitros",
-            "request": {
-              "method": "GET",
-              "url": {
-                "raw": "{{baseUrl}}/arbitros",
-                "host": ["{{baseUrl}"],
-                "path": ["arbitros"]
+        },
+        {
+          "name": "POST Crear equipo visitante",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Equipo visitante creado (201) o ya existente (409)', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "  if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    var id = json.idEquipo || json.id;",
+                  "    pm.expect(id).to.be.a('number');",
+                  "    pm.collectionVariables.set('equipoVisitanteId', id);",
+                  "  }",
+                  "});"
+                ]
               }
             }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombreEquipo\": \"Boca\",\n  \"idDisciplina\": 1,\n  \"localidad\": \"Buenos Aires\",\n  \"capitan\": { \"nombre\": \"Carlos\", \"apellido\": \"Ruiz\", \"dni\": \"33333333\" },\n  \"jugadores\": [\n    { \"nombre\": \"Carlos\", \"apellido\": \"Ruiz\", \"dni\": \"33333333\" },\n    { \"nombre\": \"Ana\", \"apellido\": \"Diaz\", \"dni\": \"44444444\" }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/equipos", "host": ["{{baseUrl}}"], "path": ["equipos"] }
           }
-        ]
-      }
-    ]
-  }
+        },
+        {
+          "name": "GET Listado de equipos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Listado de equipos del organizador', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json).to.be.an('array');",
+                  "  pm.expect(json.length).to.be.at.least(2);",
+                  "  // Idempotencia: recuperar los ids reales por nombre para el torneo,",
+                  "  // ya sea recien creados (201) o preexistentes (409).",
+                  "  var atlas = json.find(function (e) { return e.nombre === 'Atlas'; });",
+                  "  var boca = json.find(function (e) { return e.nombre === 'Boca'; });",
+                  "  if (atlas) { pm.collectionVariables.set('equipoLocalId', atlas.idEquipo || atlas.id); }",
+                  "  if (boca) { pm.collectionVariables.set('equipoVisitanteId', boca.idEquipo || boca.id); }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/equipos", "host": ["{{baseUrl}}"], "path": ["equipos"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Arbitros",
+      "item": [
+        {
+          "name": "POST Crear arbitro",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Arbitro creado (201) o ya existente (409)', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "  if (pm.response.code === 201) {",
+                  "    pm.expect(pm.response.json().idArbitro).to.be.a('number');",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Miguel\",\n  \"apellido\": \"Torres\",\n  \"dni\": \"55555555\",\n  \"email\": \"miguel.torres@global-league.com\",\n  \"telefono\": \"3312345678\",\n  \"localidad\": \"Guadalajara\",\n  \"idDisciplina\": 1\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/arbitros", "host": ["{{baseUrl}}"], "path": ["arbitros"] }
+          }
+        },
+        {
+          "name": "GET Listado de arbitros",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Listado de arbitros', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/arbitros", "host": ["{{baseUrl}}"], "path": ["arbitros"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Torneos y fixture",
+      "item": [
+        {
+          "name": "POST Crear torneo (genera fixture)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Torneo creado y fixture generado (201) o ya existente (409)', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "  if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.id).to.be.a('number');",
+                  "    pm.collectionVariables.set('torneoId', json.id);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombreTorneo\": \"Liga de Prueba CI\",\n  \"idDisciplina\": 1,\n  \"idFormato\": 1,\n  \"fechaInicio\": \"2026-11-01\",\n  \"equiposIds\": [{{equipoLocalId}}, {{equipoVisitanteId}}]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/torneos", "host": ["{{baseUrl}}"], "path": ["torneos"] }
+          }
+        },
+        {
+          "name": "GET Listado de torneos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Torneo visible en el listado', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json).to.be.an('array').that.is.not.empty;",
+                  "  // Idempotencia: fijar el torneoId por nombre (cubrre 201 y 409 previos).",
+                  "  var liga = json.find(function (t) { return t.nombre === 'Liga de Prueba CI'; });",
+                  "  if (liga) { pm.collectionVariables.set('torneoId', liga.idTorneo || liga.id); }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/torneos", "host": ["{{baseUrl}}"], "path": ["torneos"] }
+          }
+        },
+        {
+          "name": "GET Partidos del torneo (fixture)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Fixture con al menos un partido', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json).to.be.an('array');",
+                  "  pm.expect(json.length).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/torneos/{{torneoId}}/partidos", "host": ["{{baseUrl}}"], "path": ["torneos", "{{torneoId}}", "partidos"] }
+          }
+        },
+        {
+          "name": "GET Tabla de posiciones",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Posiciones calculadas para los equipos', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.be.an('object');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/torneos/{{torneoId}}/posiciones", "host": ["{{baseUrl}}"], "path": ["torneos", "{{torneoId}}", "posiciones"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Calendario",
+      "item": [
+        {
+          "name": "GET Calendario de partidos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Calendario disponible', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/calendario", "host": ["{{baseUrl}}"], "path": ["calendario"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Casos negativos",
+      "item": [
+        {
+          "name": "POST Login con credenciales invalidas (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechaza credenciales incorrectas', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json()).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"juana@global-league.com\",\n  \"password\": \"password-incorrecta\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "POST Registro con email invalido (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Valida el formato del email', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.json()).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Sin Email\",\n  \"apellido\": \"Valido\",\n  \"email\": \"no-es-un-email\",\n  \"password\": \"Secreta123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/registro", "host": ["{{baseUrl}}"], "path": ["auth", "registro"] }
+          }
+        },
+        {
+          "name": "POST Crear equipo sin campos obligatorios (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Valida los campos requeridos del equipo', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.json()).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombreEquipo\": \"\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/equipos", "host": ["{{baseUrl}}"], "path": ["equipos"] }
+          }
+        },
+        {
+          "name": "GET Posiciones de torneo inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Devuelve 404 si el torneo no existe', function () {",
+                  "  pm.expect([401, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/torneos/999999/posiciones", "host": ["{{baseUrl}}"], "path": ["torneos", "999999", "posiciones"] }
+          }
+        },
+        {
+          "name": "POST Logout (invalida la sesion)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Logout cierra la sesion', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] }
+          }
+        },
+        {
+          "name": "GET Ruta protegida tras logout (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tras logout la ruta privada exige sesion de nuevo', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json()).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Cookie", "value": "global_league_session=" } ],
+            "url": { "raw": "{{baseUrl}}/equipos", "host": ["{{baseUrl}}"], "path": ["equipos"] }
+          }
+        }
+      ]
+    }
+  ]
 }
+
