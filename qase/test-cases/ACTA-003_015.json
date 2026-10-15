@@ -1,0 +1,13 @@
+{"id":"ACTA-003","title":"Acta inexistente","priority":"P1","type":"API"}
+{"id":"ACTA-004","title":"Acta ajena","priority":"P0","type":"API"}
+{"id":"ACTA-005","title":"Crear borrador","priority":"P0","type":"API/E2E"}
+{"id":"ACTA-006","title":"Marcador fuera de rango","priority":"P0","type":"API/Unit"}
+{"id":"ACTA-007","title":"Incidencia Gol local","priority":"P0","type":"API/E2E"}
+{"id":"ACTA-008","title":"Tarjeta Roja","priority":"P1","type":"API"}
+{"id":"ACTA-009","title":"Eliminar incidencia","priority":"P1","type":"API/E2E"}
+{"id":"ACTA-010","title":"Eliminar inexistente","priority":"P2","type":"API"}
+{"id":"ACTA-011","title":"Firmar sin conformidad","priority":"P0","type":"API/E2E"}
+{"id":"ACTA-012","title":"Firmar con conformidad","priority":"P0","type":"API/E2E"}
+{"id":"ACTA-013","title":"Readonly tras firma","priority":"P0","type":"E2E"}
+{"id":"ACTA-014","title":"Rollback transacción","priority":"P1","type":"Unit"}
+{"id":"ACTA-015","title":"Sanciones automáticas","priority":"P2","type":"Unit/Integration"}
