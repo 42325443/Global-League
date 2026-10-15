@@ -11,8 +11,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -23,14 +23,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
       - run: npm ci
       - run: npx vitest run --coverage --reporter=junit --outputFile=test-reports/vitest-frontend.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: vitest-frontend
@@ -40,8 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -51,7 +51,7 @@ jobs:
       # NOTA: no se usa `npm test` (placeholder que falla); se invoca vitest directo.
       - run: npx vitest run --coverage --reporter=junit --outputFile=../test-reports/vitest-backend.xml
         working-directory: backend
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: vitest-backend
@@ -87,9 +87,9 @@ jobs:
       AUTH_SECRET: ci-test-secret
       BASE_URL: http://localhost:3000/api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -152,7 +152,7 @@ jobs:
       - name: Ejecutar pruebas de Postman con Newman
         run: bash scripts/run-newman.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: newman-reports
@@ -185,9 +185,9 @@ jobs:
       AUTH_SECRET: ci-test-secret
       BASE_URL: http://localhost:3000/api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -239,7 +239,7 @@ jobs:
 
       # 4. Instalar Java (JMeter lo requiere) y Apache JMeter
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
@@ -264,7 +264,7 @@ jobs:
             -Jjmeterengine.force.system.exit=true
 
       # 6. Guardar los reportes de rendimiento (JTL crudo + dashboard HTML)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: jmeter-report
