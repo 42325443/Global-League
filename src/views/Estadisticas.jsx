@@ -179,6 +179,17 @@ export default function Estadisticas() {
     ));
   }, [datosFiltrados]);
 
+  const rendimientoPorEquipo = useMemo(() => {
+    if (torneoFiltro !== "Todos") return datosOrdenados.slice(0, 5);
+    const porTorneo = new Map();
+    datosOrdenados.forEach((equipo) => {
+      const lista = porTorneo.get(equipo.torneoId) || [];
+      lista.push(equipo);
+      porTorneo.set(equipo.torneoId, lista);
+    });
+    return [...porTorneo.values()].flatMap((equiposDelTorneo) => equiposDelTorneo.slice(0, 3));
+  }, [datosOrdenados, torneoFiltro]);
+
   const partidosFiltrados = partidosCerrados.filter((partido) => (
     (torneoFiltro === "Todos" || String(partido.torneoId) === torneoFiltro)
     && (deporteFiltro === "Todos" || partido.deporte === deporteFiltro)
@@ -214,13 +225,39 @@ export default function Estadisticas() {
   const promedioMarcador = puntuacionHomogenea && partidosJugados > 0
     ? (marcadoresTotales / partidosJugados).toFixed(1)
     : puntuacionHomogenea ? "0.0" : "—";
-  const goleadoresFiltrados = destacados
-    .filter((jugador) => (
+  const goleadoresFiltrados = useMemo(() => {
+    const comparar = (a, b) => (
+      b.anotaciones - a.anotaciones
+      || b.asistencias - a.asistencias
+      || a.jugador.localeCompare(b.jugador)
+    );
+    const filtrados = destacados.filter((jugador) => (
       (torneoFiltro === "Todos" || String(jugador.torneoId) === torneoFiltro)
       && (deporteFiltro === "Todos" || jugador.deporte === deporteFiltro)
-    ))
-    .sort((a, b) => b.anotaciones - a.anotaciones || b.asistencias - a.asistencias || a.jugador.localeCompare(b.jugador))
-    .slice(0, 5);
+    ));
+
+    if (torneoFiltro !== "Todos") {
+      return filtrados.sort(comparar).slice(0, 5).map((jugador, index) => ({
+        ...jugador,
+        posicion: index + 1,
+      }));
+    }
+
+    const porTorneo = new Map();
+    filtrados.forEach((jugador) => {
+      const idTorneo = Number(jugador.torneoId);
+      const lista = porTorneo.get(idTorneo) || [];
+      lista.push(jugador);
+      porTorneo.set(idTorneo, lista);
+    });
+
+    return [...porTorneo.entries()]
+      .sort(([, a], [, b]) => (a[0]?.torneo || "").localeCompare(b[0]?.torneo || ""))
+      .flatMap(([, jugadores]) => jugadores.sort(comparar).slice(0, 3).map((jugador, index) => ({
+        ...jugador,
+        posicion: index + 1,
+      })));
+  }, [destacados, torneoFiltro, deporteFiltro]);
 
   // =========================================================
   // RENDER
@@ -792,7 +829,9 @@ export default function Estadisticas() {
             </h2>
 
             <p className="text-xs text-slate-500 mt-1">
-              Jugadores con más goles o puntos registrados en actas cerradas.
+              {torneoFiltro === "Todos"
+                ? "Los tres primeros anotadores de cada torneo, según las actas cerradas."
+                : "Jugadores con más goles o puntos registrados en las actas cerradas del torneo."}
             </p>
 
           </div>
@@ -807,10 +846,10 @@ export default function Estadisticas() {
 
             ) : (
 
-              goleadoresFiltrados.map((jugador, index) => (
+              goleadoresFiltrados.map((jugador) => (
 
                 <div
-                  key={jugador.id}
+                  key={jugador.id || `${jugador.torneoId}-${jugador.idJugador}`}
                   className="flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition"
                 >
 
@@ -818,16 +857,16 @@ export default function Estadisticas() {
 
                     <div
                       className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm ${
-                        index === 0
+                        jugador.posicion === 1
                           ? "bg-yellow-100 text-yellow-700"
-                          : index === 1
+                          : jugador.posicion === 2
                           ? "bg-slate-200 text-slate-700"
-                          : index === 2
+                          : jugador.posicion === 3
                           ? "bg-orange-100 text-orange-700"
                           : "bg-slate-100 text-slate-500"
                       }`}
                     >
-                      {index + 1}
+                      {jugador.posicion}
                     </div>
 
                     <div>
@@ -836,7 +875,7 @@ export default function Estadisticas() {
                       </p>
 
                       <p className="text-xs text-slate-500">
-                        {jugador.equipo}
+                        {jugador.equipo}{torneoFiltro === "Todos" && jugador.torneo ? ` · ${jugador.torneo}` : ""}
                       </p>
                     </div>
 
@@ -873,19 +912,20 @@ export default function Estadisticas() {
           <div className="p-5 border-b border-slate-200">
 
             <h2 className="text-lg font-bold text-slate-800">
-              Rendimiento por equipo
+              {torneoFiltro === "Todos" ? "Rendimiento por torneo" : "Rendimiento por equipo"}
             </h2>
 
             <p className="text-xs text-slate-500 mt-1">
-              Comparación general de los equipos.
+              {torneoFiltro === "Todos"
+                ? "Los tres equipos mejor ubicados de cada torneo."
+                : "Comparación de los equipos en el torneo seleccionado."}
             </p>
 
           </div>
 
           <div className="p-5 space-y-5">
 
-            {datosOrdenados
-              .slice(0, 5)
+            {rendimientoPorEquipo
               .map((equipo) => {
 
                 const porcentajeVictorias =

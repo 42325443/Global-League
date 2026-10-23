@@ -18,6 +18,8 @@ const puedeEditarInscripciones = (torneo) => {
   return torneo?.estado === 'Próximo' && Boolean(Number(torneo.permiteCambiarEquipos));
 };
 
+const torneoEnCurso = (torneo) => String(torneo?.estado || '').trim().toLocaleLowerCase('es-AR') === 'en curso';
+
 export default function Torneos() {
   const [torneos, setTorneos] = useState(MOCK_TORNEOS);
   const [deporteFiltro, setDeporteFiltro] = useState('');
@@ -260,6 +262,7 @@ export default function Torneos() {
   };
 
   const abrirConfirmacionEliminacion = (torneo) => {
+    if (torneoEnCurso(torneo)) return;
     setErrorEliminacion('');
     setTorneoAEliminar(torneo);
   };
@@ -283,6 +286,10 @@ export default function Torneos() {
 
   const eliminarTorneo = async () => {
     if (!torneoAEliminar || eliminandoTorneo) return;
+    if (torneoEnCurso(torneoAEliminar)) {
+      setErrorEliminacion('No se puede eliminar un torneo que está en curso.');
+      return;
+    }
 
     setEliminandoTorneo(true);
     setErrorEliminacion('');
@@ -291,12 +298,12 @@ export default function Torneos() {
       const res = await apiFetch(`/torneos/${torneoAEliminar.id}`, {
         method: 'DELETE'
       });
+      const resultado = await res.json().catch(() => ({}));
       if (res.ok) {
         setTorneos((prev) => prev.filter((t) => t.id !== torneoAEliminar.id));
         setTorneoAEliminar(null);
       } else {
-        console.error('Error del servidor al eliminar el torneo');
-        setErrorEliminacion('No se pudo eliminar el torneo. Intentá nuevamente.');
+        setErrorEliminacion(resultado.error || 'No se pudo eliminar el torneo. Intentá nuevamente.');
       }
     } catch (error) {
       console.error('Error de red al eliminar el torneo:', error);
@@ -646,8 +653,10 @@ export default function Torneos() {
                           <button
                             type="button"
                             onClick={() => abrirConfirmacionEliminacion(torneo)}
+                            disabled={torneoEnCurso(torneo)}
+                            title={torneoEnCurso(torneo) ? 'No se puede eliminar un torneo en curso' : 'Eliminar torneo'}
                             aria-label={`Eliminar ${torneo.nombre || 'torneo'}`}
-                            className="min-h-8 rounded-lg border border-red-100 bg-red-50/70 px-3 text-xs font-semibold text-red-600 transition hover:border-red-200 hover:bg-red-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-red-100"
+                            className="min-h-8 rounded-lg border border-red-100 bg-red-50/70 px-3 text-xs font-semibold text-red-600 transition hover:border-red-200 hover:bg-red-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-red-100 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-red-100 disabled:hover:bg-red-50/70"
                           >
                             Eliminar
                           </button>
@@ -708,7 +717,9 @@ export default function Torneos() {
                             <button
                               type="button"
                               onClick={() => abrirConfirmacionEliminacion(torneo)}
-                              className="rounded-lg border border-red-100 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-red-600 transition hover:border-red-200 hover:bg-red-50"
+                              disabled={torneoEnCurso(torneo)}
+                              title={torneoEnCurso(torneo) ? 'No se puede eliminar un torneo en curso' : 'Eliminar torneo'}
+                              className="rounded-lg border border-red-100 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-red-600 transition hover:border-red-200 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-red-100 disabled:hover:bg-white"
                             >
                               Eliminar
                             </button>
@@ -845,7 +856,7 @@ export default function Torneos() {
                 <button
                   type="button"
                   onClick={eliminarTorneo}
-                  disabled={eliminandoTorneo}
+                  disabled={eliminandoTorneo || torneoEnCurso(torneoAEliminar)}
                   className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {eliminandoTorneo ? 'Eliminando…' : 'Eliminar torneo'}

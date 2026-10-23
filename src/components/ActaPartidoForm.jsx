@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../lib/api';
+import { completarEstadoTorneo } from '../lib/estadoTorneo';
 
 const leerRespuesta = async (response, mensaje) => {
   const data = await response.json().catch(() => ({}));
@@ -41,7 +42,9 @@ export default function ActaPartidoForm({ idPartido, idArbitro = null, onClose, 
     const query = idArbitro ? `?idArbitro=${idArbitro}` : '';
     apiFetch(`/partidos/${idPartido}/acta${query}`)
       .then((response) => leerRespuesta(response, 'No se pudo cargar el acta.'))
-      .then((resultado) => {
+      .then(async (resultado) => {
+        if (!activo) return;
+        resultado.partido = await completarEstadoTorneo(resultado.partido);
         if (!activo) return;
         setDatos(resultado);
         const esSets = resultado.partido.tipoPuntuacion === 'Sets';
@@ -80,6 +83,7 @@ export default function ActaPartidoForm({ idPartido, idArbitro = null, onClose, 
   const esCerrada = datos?.acta?.estado === 'Cerrada'
     || datos?.partido.fechaCierre
     || ['Finalizado', 'Anulado', 'Pase libre'].includes(datos?.partido.estado);
+  const torneoEnCurso = datos?.partido.estadoTorneo === 'En Curso';
 
   const jugadores = useMemo(() => (datos?.equipos || []).flatMap((equipo) => (
     equipo.jugadores.map((jugador) => ({ ...jugador, nombreEquipo: equipo.nombre }))
@@ -193,6 +197,11 @@ export default function ActaPartidoForm({ idPartido, idArbitro = null, onClose, 
       <div className="space-y-6 px-5 py-5 sm:px-7">
         {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
         {mensaje && <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{mensaje}</p>}
+        {!esCerrada && !torneoEnCurso && (
+          <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-900">
+            El torneo está {datos.partido.estadoTorneo || 'pendiente de inicio'}. Podés guardar el borrador, pero el acta solo se puede cerrar cuando el torneo esté en curso.
+          </p>
+        )}
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -347,7 +356,7 @@ export default function ActaPartidoForm({ idPartido, idArbitro = null, onClose, 
         <footer className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur sm:flex-row sm:justify-end sm:px-7">
           <button type="button" onClick={onClose} disabled={guardando} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Cancelar</button>
           <button type="button" onClick={() => guardar(false)} disabled={guardando} className="rounded-lg border border-blue-200 px-4 py-2.5 text-sm font-semibold text-blue-700 disabled:opacity-60">{guardando ? 'Guardando…' : 'Guardar borrador'}</button>
-          <button type="button" onClick={() => setConfirmarCierre(true)} disabled={guardando} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">Cerrar acta</button>
+          <button type="button" onClick={() => setConfirmarCierre(true)} disabled={guardando || !torneoEnCurso} title={!torneoEnCurso ? 'El torneo debe estar en curso para cerrar el acta.' : undefined} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Cerrar acta</button>
         </footer>
       )}
 
@@ -358,7 +367,7 @@ export default function ActaPartidoForm({ idPartido, idArbitro = null, onClose, 
             <p className="mt-2 text-sm leading-6 text-slate-600">Se guardará el resultado y se actualizará la tabla de posiciones o el bracket. Después del cierre, el acta quedará bloqueada para edición.</p>
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" onClick={() => setConfirmarCierre(false)} disabled={guardando} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Seguir editando</button>
-              <button type="button" onClick={() => guardar(true)} disabled={guardando} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{guardando ? 'Cerrando…' : 'Confirmar cierre'}</button>
+              <button type="button" onClick={() => guardar(true)} disabled={guardando || !torneoEnCurso} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{guardando ? 'Cerrando…' : 'Confirmar cierre'}</button>
             </div>
           </section>
         </div>

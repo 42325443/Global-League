@@ -146,7 +146,10 @@ export const getEstadisticas = async (req, res) => {
       estadisticas: ordenadas,
       destacados: destacados[0].map((item) => ({
         ...item,
+        id: `${Number(item.idTorneo)}-${Number(item.idJugador)}`,
         idJugador: Number(item.idJugador),
+        torneoId: Number(item.idTorneo),
+        torneo: item.nombreTorneo,
         anotaciones: Number(item.anotaciones || 0),
         asistencias: Number(item.asistencias || 0),
         amarillas: Number(item.amarillas || 0),

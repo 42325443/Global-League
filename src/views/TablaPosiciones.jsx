@@ -194,7 +194,7 @@ export default function TablaPosiciones() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="w-full min-w-0">
       <header className="mb-5 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-lime-50/70 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div>
           <span className="text-xs font-extrabold uppercase tracking-[0.16em] text-lime-700">Competición</span>

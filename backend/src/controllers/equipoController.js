@@ -236,7 +236,7 @@ export const createEquipo = async (req, res) => {
       return res.status(400).json({ error: 'La disciplina seleccionada no existe.' });
     }
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'El DNI ingresado ya está registrado en otro equipo.' });
+      return res.status(409).json({ error: 'El DNI ingresado ya está registrado.' });
     }
 
     res.status(500).json({ error: 'No se pudo guardar el equipo y sus jugadores.' });
@@ -371,10 +371,94 @@ export const addJugador = async (req, res) => {
       return res.status(404).json({ error: 'No se encontró el equipo.' });
     }
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'Ese DNI ya está registrado en otro equipo.' });
+      return res.status(409).json({ error: 'Ese DNI ya está registrado.' });
     }
     console.error('Error al agregar jugador:', error);
     res.status(500).json({ error: 'No se pudo agregar el jugador.' });
+  }
+};
+
+export const updateJugador = async (req, res) => {
+  const idEquipo = obtenerIdValido(req.params.id);
+  const idJugador = obtenerIdValido(req.params.idJugador);
+  if (!idEquipo || !idJugador) {
+    return res.status(400).json({ error: 'El identificador del equipo o del jugador no es válido.' });
+  }
+
+  const { nombre, apellido, dni = '' } = req.body || {};
+  const jugador = {
+    nombre: typeof nombre === 'string' ? nombre.trim() : '',
+    apellido: typeof apellido === 'string' ? apellido.trim() : '',
+    dni: typeof dni === 'string' ? dni.trim() : ''
+  };
+
+  if (!jugador.nombre || jugador.nombre.length > 80
+    || !jugador.apellido || jugador.apellido.length > 80
+    || jugador.dni.length > 20) {
+    return res.status(400).json({
+      error: 'El jugador necesita nombre y apellido de hasta 80 caracteres; el DNI admite hasta 20.'
+    });
+  }
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [jugadores] = await connection.query(`
+      SELECT j.idJugador, j.esCapitan
+      FROM jugador j
+      JOIN equipo e ON e.idEquipo = j.idEquipo
+      WHERE j.idJugador = ? AND j.idEquipo = ? AND e.idUsuario = ?
+      FOR UPDATE
+    `, [idJugador, idEquipo, req.user.idUsuario]);
+
+    if (jugadores.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'No se encontró el jugador en este equipo.' });
+    }
+
+    const esCapitan = Number(jugadores[0].esCapitan) === 1;
+    const nombreCompleto = `${jugador.nombre} ${jugador.apellido}`;
+    if (esCapitan && nombreCompleto.length > 120) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'El nombre completo del capitán no puede superar 120 caracteres.' });
+    }
+    if (esCapitan && !jugador.dni) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'El capitán debe tener un DNI registrado.' });
+    }
+
+    await connection.query(`
+      UPDATE jugador
+      SET nombre = ?, apellido = ?, dni = ?
+      WHERE idJugador = ? AND idEquipo = ?
+    `, [jugador.nombre, jugador.apellido, jugador.dni || null, idJugador, idEquipo]);
+
+    if (esCapitan) {
+      await connection.query(
+        'UPDATE equipo SET capitan = ? WHERE idEquipo = ? AND idUsuario = ?',
+        [nombreCompleto, idEquipo, req.user.idUsuario]
+      );
+    }
+
+    await connection.commit();
+    res.json({
+      idJugador,
+      ...jugador,
+      dni: jugador.dni || null,
+      esCapitan,
+      message: 'Jugador actualizado correctamente.'
+    });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Ese DNI ya está registrado.' });
+    }
+    console.error('Error al actualizar jugador:', error);
+    res.status(500).json({ error: 'No se pudo actualizar el jugador.' });
+  } finally {
+    connection?.release();
   }
 };
 

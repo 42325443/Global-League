@@ -28,6 +28,20 @@ export const getCalendario = async (req, res) => {
         t.idDisciplina,
         DATE_FORMAT(t.fechaInicio, '%Y-%m-%d') AS fechaInicioTorneo,
         DATE_FORMAT(t.fechaFin, '%Y-%m-%d') AS fechaFinTorneo,
+        CASE
+          WHEN t.estadoGestion = 'Cancelado' THEN 'Cancelado'
+          WHEN t.estadoGestion = 'Suspendido' THEN 'Suspendido'
+          WHEN t.estadoGestion = 'Cerrado' OR (
+            EXISTS (SELECT 1 FROM partido partido_torneo WHERE partido_torneo.idTorneo = t.idTorneo)
+            AND NOT EXISTS (
+              SELECT 1 FROM partido partido_pendiente
+              WHERE partido_pendiente.idTorneo = t.idTorneo
+                AND COALESCE(partido_pendiente.estado, 'Pendiente') NOT IN ('Finalizado', 'Anulado', 'Pase libre')
+            )
+          ) THEN 'Finalizado'
+          WHEN CURDATE() < t.fechaInicio THEN 'Próximo'
+          ELSE 'En Curso'
+        END AS estadoTorneo,
         p.idEquipoLocal,
         local.nombreEquipo AS equipoLocal,
         p.idEquipoVisitante,

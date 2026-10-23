@@ -17,8 +17,22 @@ const cargarPartidoPropio = async (connection, idPartido, idUsuario, bloquear = 
     SELECT
       p.idPartido, p.idTorneo, p.idEquipoLocal, p.idEquipoVisitante,
       p.marcadorLocal, p.marcadorVisitante, p.idEquipoGanador, p.tipoEtapa,
-      p.nombreRonda, p.numeroPartido, p.estado, p.tipoResolucion, p.fechaCierre,
+      p.jornada, p.nombreRonda, p.numeroPartido, p.estado, p.tipoResolucion, p.fechaCierre,
       p.fechaHoraInicio, p.fechaHoraFin,
+      CASE
+        WHEN t.estadoGestion = 'Cancelado' THEN 'Cancelado'
+        WHEN t.estadoGestion = 'Suspendido' THEN 'Suspendido'
+        WHEN t.estadoGestion = 'Cerrado' OR (
+          EXISTS (SELECT 1 FROM partido partido_torneo WHERE partido_torneo.idTorneo = t.idTorneo)
+          AND NOT EXISTS (
+            SELECT 1 FROM partido partido_pendiente
+            WHERE partido_pendiente.idTorneo = t.idTorneo
+              AND COALESCE(partido_pendiente.estado, 'Pendiente') NOT IN ('Finalizado', 'Anulado', 'Pase libre')
+          )
+        ) THEN 'Finalizado'
+        WHEN CURDATE() < t.fechaInicio THEN 'Próximo'
+        ELSE 'En Curso'
+      END AS estadoTorneo,
       t.nombreTorneo, t.idDisciplina, f.nombreFormato,
       d.tipoPuntuacion, d.nombreDisciplina,
       local.nombreEquipo AS equipoLocal, visitante.nombreEquipo AS equipoVisitante
@@ -346,6 +360,12 @@ export const guardarActaPartido = async (req, res) => {
     }
     if (partido.fechaCierre || ['Finalizado', 'Anulado', 'Pase libre'].includes(partido.estado)) {
       throw errorHttp('El partido ya fue cerrado y su acta no se puede modificar.', 409);
+    }
+    if (cerrar && partido.estadoTorneo !== 'En Curso') {
+      throw errorHttp(
+        `No se puede cerrar el acta mientras el torneo esté en estado "${partido.estadoTorneo}". Podés guardar el borrador y cerrarla cuando comience.`,
+        409
+      );
     }
 
     const [asignaciones] = await connection.query(`

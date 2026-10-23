@@ -1,6 +1,7 @@
 // Ruta del componente: src/components/Navbar.jsx
 import { useState, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
+import { ArrowRightIcon, QuestionMarkCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { ICONS } from '../icons';
 
 // Arreglo para cargar vistas al navbar
@@ -22,11 +23,52 @@ function NavIcon({ name, className = 'w-5 h-5' }) {
 
 export function Navbar({ role = 'Organizador', onLogout }) {
   const [open, setOpen] = useState(false);
+  const [tutorialAbierto, setTutorialAbierto] = useState(false);
   const [confirmarCierreSesion, setConfirmarCierreSesion] = useState(false);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const panelRef = useRef(null);
   const openButtonRef = useRef(null);
   const cancelarCierreRef = useRef(null);
+  const tutorialRef = useRef(null);
+
+  const pasosTutorial = [
+    {
+      titulo: 'Prepará tus equipos',
+      texto: 'Creá cada plantel, cargá sus jugadores y dejá identificado al capitán. Podés completar o corregir la lista más adelante.',
+      ruta: '/equipos',
+      accion: 'Ir a Equipos',
+    },
+    {
+      titulo: 'Configurá el torneo',
+      texto: 'Elegí deporte, disciplina, fechas, formato y equipos participantes. En ligas también definís el sistema de puntos y los criterios de desempate.',
+      ruta: '/torneos',
+      accion: 'Ir a Torneos',
+    },
+    {
+      titulo: 'Revisá los encuentros',
+      texto: 'El sistema genera el fixture o el bracket con los equipos inscriptos. Desde el detalle del torneo podés revisar cómo quedaron los cruces.',
+      ruta: '/torneos',
+      accion: 'Ver torneos',
+    },
+    {
+      titulo: 'Programá la jornada',
+      texto: 'En Calendario asigná fecha, horario, cancha y árbitros. Los encuentros deben quedar dentro del período del torneo y sin superposiciones.',
+      ruta: '/calendario',
+      accion: 'Ir al Calendario',
+    },
+    {
+      titulo: 'Cargá y cerrá las actas',
+      texto: 'Cuando el torneo esté en curso, elegí el partido y cargá el resultado, participantes e incidencias. Podés guardar un borrador o cerrar el acta.',
+      ruta: '/actas',
+      accion: 'Ir a Acta Digital',
+    },
+    {
+      titulo: 'Consultá cómo avanza',
+      texto: 'Al cerrar un acta se actualizan la tabla de posiciones o la siguiente ronda del bracket. Estadísticas reúne el rendimiento y las incidencias de tus torneos.',
+      ruta: '/posiciones',
+      accion: 'Ver posiciones',
+    },
+  ];
 
   const solicitarCierreSesion = () => {
     setOpen(false);
@@ -46,7 +88,10 @@ export function Navbar({ role = 'Organizador', onLogout }) {
 
   useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+        setTutorialAbierto(false);
+      }
     }
     if (open) {
       document.addEventListener('keydown', onKey);
@@ -67,6 +112,16 @@ export function Navbar({ role = 'Organizador', onLogout }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [confirmarCierreSesion, cerrandoSesion]);
+
+  useEffect(() => {
+    if (!tutorialAbierto) return undefined;
+    tutorialRef.current?.focus();
+    const cerrarConEscape = (event) => {
+      if (event.key === 'Escape') setTutorialAbierto(false);
+    };
+    document.addEventListener('keydown', cerrarConEscape);
+    return () => document.removeEventListener('keydown', cerrarConEscape);
+  }, [tutorialAbierto]);
 
   const linkClasses = (isActive) =>
     `flex items-center gap-3 px-3 py-2 rounded-md transition-colors select-none
@@ -95,11 +150,22 @@ export function Navbar({ role = 'Organizador', onLogout }) {
 
         </div>
 
-        <div
-          id="userRoleMobile"
-          className="flex h-8 max-w-28 shrink-0 items-center justify-center rounded-full bg-green-500 px-3 text-xs"
-        >
-          <span className="truncate font-semibold text-white">{role}</span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <div
+            id="userRoleMobile"
+            className="flex h-8 max-w-32 items-center justify-center rounded-full bg-green-500 px-3 text-xs"
+          >
+            <span className="truncate font-semibold text-white">{role}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTutorialAbierto(true)}
+            aria-label="Abrir tutorial de uso"
+            title="Cómo usar Global League"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-lime-300 hover:bg-lime-50 hover:text-lime-800 focus:outline-none focus:ring-2 focus:ring-lime-400"
+          >
+            <QuestionMarkCircleIcon className="h-5 w-5" />
+          </button>
         </div>
 
       </header>
@@ -158,13 +224,22 @@ export function Navbar({ role = 'Organizador', onLogout }) {
         className="hidden md:flex md:fixed md:top-0 md:left-55 md:right-0 md:z-30 md:h-14 md:items-center md:justify-end md:border-b md:border-slate-300 md:px-5 bg-white"
       >
 
-        <div
-          id="userRole"
-          className="h-10 w-40 bg-green-400 text-sm rounded-4xl flex items-center justify-center select-none cursor-pointer hover:bg-green-600"
-        >
-
-          <span className="font-semibold text-white">{role}</span>
-
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setTutorialAbierto(true)}
+            aria-label="Abrir tutorial de uso"
+            title="Cómo usar Global League"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-lime-300 hover:bg-lime-50 hover:text-lime-800 focus:outline-none focus:ring-2 focus:ring-lime-400"
+          >
+            <QuestionMarkCircleIcon className="h-5 w-5" />
+          </button>
+          <div
+            id="userRole"
+            className="flex h-10 w-40 cursor-default select-none items-center justify-center rounded-4xl bg-green-400 px-3 text-sm"
+          >
+            <span className="truncate font-semibold text-white">{role}</span>
+          </div>
         </div>
 
       </header>
@@ -271,6 +346,72 @@ export function Navbar({ role = 'Organizador', onLogout }) {
                 {cerrandoSesion ? 'Cerrando sesión…' : 'Cerrar sesión'}
               </button>
             </div>
+          </section>
+        </div>
+      )}
+
+      {tutorialAbierto && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-5">
+          <button
+            type="button"
+            aria-label="Cerrar tutorial"
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            onClick={() => setTutorialAbierto(false)}
+          />
+          <section
+            ref={tutorialRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tutorial-titulo"
+            tabIndex={-1}
+            className="relative z-10 flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl outline-none"
+          >
+            <header className="relative shrink-0 overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 px-5 py-5 text-white sm:px-7">
+              <div aria-hidden="true" className="pointer-events-none absolute -right-8 -top-20 h-48 w-48 rounded-full border border-white/10" />
+              <div className="relative flex items-start justify-between gap-4">
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-lime-300">Guía rápida</span>
+                  <h2 id="tutorial-titulo" className="mt-1 text-xl font-extrabold sm:text-2xl">Cómo organizar un torneo</h2>
+                  <p className="mt-1 max-w-xl text-sm leading-5 text-slate-300">Seguí este recorrido para pasar de los planteles al cierre de los partidos.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTutorialAbierto(false)}
+                  aria-label="Cerrar tutorial"
+                  className="rounded-lg p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              <ol className="grid gap-3 sm:grid-cols-2">
+                {pasosTutorial.map((paso, index) => (
+                  <li key={paso.titulo} className="flex min-w-0 gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 sm:p-4">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-lime-100 text-sm font-black text-lime-800">{index + 1}</span>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-extrabold text-slate-900">{paso.titulo}</h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-600">{paso.texto}</p>
+                      <NavLink
+                        to={paso.ruta}
+                        onClick={() => setTutorialAbierto(false)}
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:text-blue-900"
+                      >
+                        {paso.accion}<ArrowRightIcon className="h-3.5 w-3.5" />
+                      </NavLink>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-900">
+                Consejo: cerrá cada acta cuando el resultado esté confirmado; esa acción actualiza automáticamente la clasificación o el bracket.
+              </p>
+            </div>
+
+            <footer className="flex shrink-0 justify-end border-t border-slate-200 bg-white px-4 py-3 sm:px-6">
+              <button type="button" onClick={() => setTutorialAbierto(false)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700">Entendido</button>
+            </footer>
           </section>
         </div>
       )}

@@ -274,16 +274,45 @@ export const createTorneo = async (req, res) => {
 };
 
 export const deleteTorneo = async (req, res) => {
-  const { id } = req.params;
+  const idTorneo = Number(req.params.id);
+  let connection;
   try {
-    const [resultado] = await pool.query(
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [[torneo]] = await connection.query(`
+      SELECT t.idTorneo, ${estadoTorneoCalculadoSql}
+      FROM torneo t
+      WHERE t.idTorneo = ? AND t.idUsuario = ?
+      FOR UPDATE
+    `, [idTorneo, req.user.idUsuario]);
+
+    if (!torneo) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'No se encontró el torneo.' });
+    }
+    if (torneo.estadoCalculado === 'En Curso') {
+      await connection.rollback();
+      return res.status(409).json({ error: 'No se puede eliminar un torneo que está en curso.' });
+    }
+
+    await connection.query(
       'DELETE FROM torneo WHERE idTorneo = ? AND idUsuario = ?',
-      [id, req.user.idUsuario]
+      [idTorneo, req.user.idUsuario]
     );
-    if (resultado.affectedRows === 0) return res.status(404).json({ error: 'No se encontró el torneo.' });
+    await connection.commit();
     res.json({ message: 'Torneo eliminado con éxito' });
   } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch {
+        // Conserva el error original si la transacción ya se había cerrado.
+      }
+    }
     res.status(500).json({ error: 'Error al eliminar torneo', details: error.message });
+  } finally {
+    connection?.release();
   }
 };
 
