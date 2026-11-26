@@ -6,6 +6,7 @@ import {
   getEquipoById,
   getEquipos,
   setCapitan,
+  updateJugador,
   updateEquipo
 } from '../controllers/equipoController.js';
 
@@ -15,6 +16,7 @@ router.post('/equipos', createEquipo);
 router.put('/equipos/:id', updateEquipo);
 router.delete('/equipos/:id', deleteEquipo);
 router.post('/equipos/:id/jugadores', addJugador);
+router.put('/equipos/:id/jugadores/:idJugador', updateJugador);
 router.patch('/equipos/:id/capitan', setCapitan);
 router.get('/equipos/:id', getEquipoById);
 router.get('/equipos', getEquipos);

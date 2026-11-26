@@ -1,0 +1,5 @@
+{"id":"AUTH-002","title":"Login inválido","priority":"P0","type":"API"}
+{"id":"AUTH-003","title":"Registro duplicado","priority":"P0","type":"API"}
+{"id":"AUTH-004","title":"Ruta protegida sin cookie","priority":"P0","type":"API/E2E"}
+{"id":"AUTH-005","title":"Logout","priority":"P1","type":"E2E"}
+{"id":"AUTH-006","title":"Sesión expirada","priority":"P2","type":"E2E"}

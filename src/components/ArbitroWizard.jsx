@@ -107,9 +107,6 @@ export const ArbitroWizard = ({ onVolver, onArbitroCreado }) => {
     }));
   };
 
-  const deporteSeleccionado = deportes.find(
-    (deporte) => String(deporte.id) === String(formData.idDeporte)
-  );
   const especialidades = disciplinas.filter(
     (disciplina) => String(disciplina.idDeporte) === String(formData.idDeporte)
   );

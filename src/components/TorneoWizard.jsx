@@ -29,6 +29,15 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
   // Estado para la gestión de equipos
   const [equiposDisponibles, setEquiposDisponibles] = useState([]);
   const [equiposSeleccionados, setEquiposSeleccionados] = useState([]);
+  const [criteriosDesempate, setCriteriosDesempate] = useState([
+    'Diferencia',
+    'MarcadorAFavor',
+    'ResultadoDirecto'
+  ]);
+  const [reglasSancion, setReglasSancion] = useState([
+    { tipoEvento: 'Tarjeta Amarilla', cantidadAcumulada: 3, partidosSuspension: 1 },
+    { tipoEvento: 'Tarjeta Roja', cantidadAcumulada: 1, partidosSuspension: 1 }
+  ]);
 
   // Estado del formulario
   const [formData, setFormData] = useState({
@@ -226,7 +235,9 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
       fechaFin: formData.fechaFin,
       ubicacion: formData.ubicacion,
       cantidadEquiposMax: formData.cantidadEquiposMax,
-      equiposIds: equiposSeleccionados.map((eq) => eq.id)
+      equiposIds: equiposSeleccionados.map((eq) => eq.id),
+      criteriosDesempate,
+      reglasSancion
     };
 
     try {
@@ -253,7 +264,7 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
       <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
         <div>
           <span className={`text-xs font-bold uppercase tracking-wider ${creado ? 'text-emerald-400' : 'text-blue-400'}`}>
-            {creado ? 'Creación completada' : `Paso ${paso} de 5`}
+            {creado ? 'Creación completada' : `Paso ${paso} de 6`}
           </span>
           <h2 className="text-2xl font-bold tracking-tight text-white">
             {creado ? 'Torneo creado exitosamente' : 'Crear nuevo torneo'}
@@ -268,8 +279,8 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
         </button>
       </div>
 
-      {!creado && <div className="grid grid-cols-5 gap-2 mb-8">
-        {[1, 2, 3, 4, 5].map((i) => (
+      {!creado && <div className="grid grid-cols-6 gap-2 mb-8">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
           <div
             key={i}
             className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -525,6 +536,63 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
       )}
 
       {!creado && paso === 5 && (
+        <div className="space-y-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-300">Reglas deportivas</p>
+            <h3 className="mt-0.5 text-base font-semibold text-white">Criterios para desempatar posiciones</h3>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Los tres criterios se aplican en el orden elegido cuando hay igualdad de puntos.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {criteriosDesempate.map((criterio, indice) => (
+              <label key={indice} className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/40 p-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-700 text-[10px] font-bold text-slate-300">{indice + 1}</span>
+                <select
+                  value={criterio}
+                  onChange={(event) => setCriteriosDesempate((actuales) => actuales.map((valor, posicion) => (
+                    posicion === indice ? event.target.value : valor
+                  )))}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-2 text-xs text-slate-100 outline-none focus:border-blue-500"
+                >
+                  <option value="Diferencia">Diferencia de marcador</option>
+                  <option value="MarcadorAFavor">Marcador a favor</option>
+                  <option value="ResultadoDirecto">Resultado directo</option>
+                  <option value="FairPlay">Fair play (menos tarjetas)</option>
+                </select>
+              </label>
+            ))}
+          </div>
+          <p className="text-[11px] leading-4 text-slate-500">
+            El orden no puede repetir criterios. Si continúa el empate luego de los tres, se mantiene la igualdad.
+          </p>
+          <section className="rounded-xl border border-slate-700 bg-slate-800/40 p-3">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+              <h4 className="text-sm font-bold text-slate-100">Reglas de suspensión</h4>
+              <p className="text-[11px] leading-4 text-slate-400">Se aplican al cerrar actas.</p>
+            </div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {reglasSancion.map((regla, indice) => (
+                <div key={regla.tipoEvento} className="rounded-lg border border-slate-700 bg-slate-900/60 p-2.5">
+                  <p className="mb-2 text-xs font-semibold text-slate-200">{regla.tipoEvento}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block text-[10px] font-semibold leading-4 text-slate-400">
+                      Cantidad
+                      <input type="number" min="1" max="100" required value={regla.cantidadAcumulada} onChange={(event) => setReglasSancion((actuales) => actuales.map((item, i) => i === indice ? { ...item, cantidadAcumulada: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block text-[10px] font-semibold leading-4 text-slate-400">
+                      Partidos
+                      <input type="number" min="1" max="20" required value={regla.partidosSuspension} onChange={(event) => setReglasSancion((actuales) => actuales.map((item, i) => i === indice ? { ...item, partidosSuspension: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-blue-500" />
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {!creado && paso === 6 && (
         <div className="space-y-5">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-300">Revisión final</p>
@@ -567,6 +635,22 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
                     </li>
                   ))}
                 </ul>
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Desempates (en orden)</dt>
+                <dd className="mt-2 flex flex-wrap gap-2">
+                  {criteriosDesempate.map((criterio, indice) => (
+                    <span key={criterio} className="rounded-full border border-slate-600 bg-slate-900/70 px-2.5 py-1 text-xs text-slate-300">
+                      {indice + 1}. {criterio === 'MarcadorAFavor' ? 'Marcador a favor' : criterio === 'ResultadoDirecto' ? 'Resultado directo' : criterio === 'FairPlay' ? 'Fair play' : 'Diferencia'}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Suspensiones automáticas</dt>
+                <dd className="mt-1 text-sm font-medium text-slate-200">
+                  {reglasSancion.map((regla) => `${regla.cantidadAcumulada} ${regla.tipoEvento === 'Tarjeta Amarilla' ? 'amarillas' : 'roja(s)'} → ${regla.partidosSuspension} partido(s)`).join(' · ')}
+                </dd>
               </div>
             </dl>
           </div>
@@ -630,6 +714,15 @@ export const TorneoWizard = ({ onVolver, onTorneoCreado }) => {
                 type="button"
                 onClick={continuarAConfirmacion}
                 disabled={!formData.nombreTorneo.trim() || !formData.fechaInicio || !formData.fechaFin}
+                className="rounded-lg bg-blue-600 px-5 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Configurar desempates
+              </button>
+            ) : paso === 5 ? (
+              <button
+                type="button"
+                onClick={() => { setError(null); setPaso(6); }}
+                disabled={new Set(criteriosDesempate).size !== 3}
                 className="rounded-lg bg-blue-600 px-5 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Revisar torneo

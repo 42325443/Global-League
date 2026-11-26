@@ -1,0 +1,7 @@
+# Normaliza los finales de linea a LF (Unix) en cada checkout.
+# Evita el clasico error en CI: "pipefail : invalid option name" provocado
+# por CRLF de Windows al ejecutar scripts .sh con bash en ubuntu-latest.
+* text=auto eol=lf
+
+# Los scripts de shell siempre con LF (y ejecutables).
+*.sh text eol=lf

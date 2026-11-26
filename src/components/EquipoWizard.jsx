@@ -7,6 +7,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
   const [paso, setPaso] = useState(1);
   const [guardando, setGuardando] = useState(false);
   const [errorGuardado, setErrorGuardado] = useState("");
+  const [errorCapitan, setErrorCapitan] = useState("");
 
   const [formData, setFormData] = useState({
     nombreEquipo: "",
@@ -15,6 +16,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
     localidad: "",
     capitanNombre: "",
     capitanApellido: "",
+    capitanDni: "",
   });
 
   const [deportes, setDeportes] = useState([]);
@@ -122,6 +124,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
       ...prev,
       [name]: value,
     }));
+    if (name.startsWith("capitan")) setErrorCapitan("");
   };
 
   const seleccionarDeporte = (deporte) => {
@@ -177,35 +180,44 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
   const prepararPlantelConCapitan = () => {
     const capitanNombre = formData.capitanNombre.trim();
     const capitanApellido = formData.capitanApellido.trim();
+    const capitanDni = formData.capitanDni.trim();
     const normalizar = (valor) => valor.trim().toLocaleLowerCase();
+    const jugadoresManuales = jugadores.filter((jugador) => !jugador.esCapitanAuto);
+    const indiceCapitan = jugadoresManuales.findIndex((jugador) => (
+      normalizar(jugador.nombre) === normalizar(capitanNombre)
+      && normalizar(jugador.apellido) === normalizar(capitanApellido)
+    ));
 
-    setJugadores((prev) => {
-      const jugadoresManuales = prev.filter((jugador) => !jugador.esCapitanAuto);
-      const indiceCapitan = jugadoresManuales.findIndex((jugador) => (
-        normalizar(jugador.nombre) === normalizar(capitanNombre)
-        && normalizar(jugador.apellido) === normalizar(capitanApellido)
-      ));
+    if (indiceCapitan >= 0 && jugadoresManuales[indiceCapitan].dni.trim()
+      && jugadoresManuales[indiceCapitan].dni.trim() !== capitanDni) {
+      setErrorCapitan("El DNI del capitán no coincide con el DNI cargado para ese jugador.");
+      return false;
+    }
 
-      if (indiceCapitan >= 0) {
-        return jugadoresManuales.map((jugador, index) => ({
-          ...jugador,
-          esCapitan: index === indiceCapitan,
-          esCapitanAuto: false,
-        }));
-      }
+    if (indiceCapitan >= 0) {
+      setJugadores(jugadoresManuales.map((jugador, index) => ({
+        ...jugador,
+        dni: index === indiceCapitan ? capitanDni : jugador.dni,
+        esCapitan: index === indiceCapitan,
+        esCapitanAuto: false,
+      })));
+      setErrorCapitan("");
+      return true;
+    }
 
-      return [
-        ...jugadoresManuales.map((jugador) => ({ ...jugador, esCapitan: false })),
-        {
-          id: Date.now(),
-          nombre: capitanNombre,
-          apellido: capitanApellido,
-          dni: "",
-          esCapitan: true,
-          esCapitanAuto: true,
-        },
-      ];
-    });
+    setJugadores([
+      ...jugadoresManuales.map((jugador) => ({ ...jugador, esCapitan: false })),
+      {
+        id: Date.now(),
+        nombre: capitanNombre,
+        apellido: capitanApellido,
+        dni: capitanDni,
+        esCapitan: true,
+        esCapitanAuto: true,
+      },
+    ]);
+    setErrorCapitan("");
+    return true;
   };
 
   const handleFinalizar = async (e) => {
@@ -226,6 +238,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
           capitan: {
             nombre: formData.capitanNombre.trim(),
             apellido: formData.capitanApellido.trim(),
+            dni: formData.capitanDni.trim(),
           },
           jugadores: jugadores.map(({ nombre, apellido, dni, esCapitan }) => ({
             nombre,
@@ -257,7 +270,8 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
     formData.nombreEquipo.trim() &&
     formData.localidad.trim() &&
     formData.capitanNombre.trim() &&
-    formData.capitanApellido.trim();
+    formData.capitanApellido.trim() &&
+    formData.capitanDni.trim();
 
   return (
     <div className="w-full max-w-3xl mx-auto bg-slate-900 text-slate-100 p-6 md:p-8 rounded-2xl shadow-2xl border border-slate-800">
@@ -448,7 +462,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
             <label className="block text-xs font-medium text-slate-400 mb-1">
               Capitán * <span className="font-normal">(también se agregará al plantel)</span>
             </label>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <input
                 type="text"
                 name="capitanNombre"
@@ -465,7 +479,19 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
                 placeholder="Apellido"
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
               />
+              <input
+                type="text"
+                name="capitanDni"
+                value={formData.capitanDni}
+                onChange={handleChange}
+                placeholder="DNI"
+                aria-label="DNI del capitán"
+                inputMode="numeric"
+                maxLength={20}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+              />
             </div>
+            {errorCapitan && <p role="alert" className="mt-2 text-xs text-red-400">{errorCapitan}</p>}
           </div>
 
         </div>
@@ -674,7 +700,7 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
               (paso === 2 && !puedeAvanzarPaso2)
             }
             onClick={() => {
-              if (paso === 2) prepararPlantelConCapitan();
+              if (paso === 2 && !prepararPlantelConCapitan()) return;
               setPaso((p) => p + 1);
             }}
             className="px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold text-xs hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
@@ -693,7 +719,8 @@ export const EquipoWizard = ({ onVolver, onEquipoCreado }) => {
               !formData.idDisciplina ||
               !formData.localidad.trim() ||
               !formData.capitanNombre.trim() ||
-              !formData.capitanApellido.trim()
+              !formData.capitanApellido.trim() ||
+              !formData.capitanDni.trim()
             }
             className="px-5 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >

@@ -24,4 +24,10 @@ export default defineConfig([
       globals: globals.node,
     },
   },
+  {
+    files: ['scripts/load-test.js'],
+    languageOptions: {
+      globals: { ...globals.node, __ENV: 'readonly' },
+    },
+  },
 ])

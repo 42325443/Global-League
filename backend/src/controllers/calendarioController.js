@@ -25,12 +25,28 @@ export const getCalendario = async (req, res) => {
         p.idPartido,
         p.idTorneo,
         t.nombreTorneo,
+        t.idDisciplina,
         DATE_FORMAT(t.fechaInicio, '%Y-%m-%d') AS fechaInicioTorneo,
         DATE_FORMAT(t.fechaFin, '%Y-%m-%d') AS fechaFinTorneo,
+        CASE
+          WHEN t.estadoGestion = 'Cancelado' THEN 'Cancelado'
+          WHEN t.estadoGestion = 'Suspendido' THEN 'Suspendido'
+          WHEN t.estadoGestion = 'Cerrado' OR (
+            EXISTS (SELECT 1 FROM partido partido_torneo WHERE partido_torneo.idTorneo = t.idTorneo)
+            AND NOT EXISTS (
+              SELECT 1 FROM partido partido_pendiente
+              WHERE partido_pendiente.idTorneo = t.idTorneo
+                AND COALESCE(partido_pendiente.estado, 'Pendiente') NOT IN ('Finalizado', 'Anulado', 'Pase libre')
+            )
+          ) THEN 'Finalizado'
+          WHEN CURDATE() < t.fechaInicio THEN 'Próximo'
+          ELSE 'En Curso'
+        END AS estadoTorneo,
         p.idEquipoLocal,
         local.nombreEquipo AS equipoLocal,
         p.idEquipoVisitante,
         visitante.nombreEquipo AS equipoVisitante,
+        p.fechaCierre,
         p.jornada,
         p.tipoEtapa,
         p.nombreRonda,
@@ -42,12 +58,20 @@ export const getCalendario = async (req, res) => {
         DATE_FORMAT(p.fechaHoraFin, '%Y-%m-%dT%H:%i:%s') AS fechaHoraFin,
         p.idCancha,
         c.nombreCancha,
-        c.ubicacion AS ubicacionCancha
+        c.ubicacion AS ubicacionCancha,
+        ap.estado AS estadoActa,
+        ap.idArbitro AS idArbitroActa,
+        (SELECT GROUP_CONCAT(pa.idArbitro ORDER BY pa.rol, pa.idArbitro SEPARATOR ',')
+         FROM partido_arbitro pa WHERE pa.idPartido = p.idPartido) AS idsArbitros,
+        (SELECT GROUP_CONCAT(CONCAT(a.nombre, ' ', a.apellido) ORDER BY pa.rol, a.apellido SEPARATOR ', ')
+         FROM partido_arbitro pa JOIN arbitro a ON a.idArbitro = pa.idArbitro
+         WHERE pa.idPartido = p.idPartido) AS nombresArbitros
       FROM partido p
       JOIN torneo t ON t.idTorneo = p.idTorneo
       LEFT JOIN equipo local ON local.idEquipo = p.idEquipoLocal
       LEFT JOIN equipo visitante ON visitante.idEquipo = p.idEquipoVisitante
       LEFT JOIN cancha c ON c.idCancha = p.idCancha
+      LEFT JOIN acta_partido ap ON ap.idPartido = p.idPartido
       WHERE t.idUsuario = ?
       ORDER BY p.fechaHoraInicio IS NULL DESC, p.fechaHoraInicio, t.fechaInicio, p.jornada, p.numeroPartido
     `, [req.user.idUsuario]);
@@ -135,6 +159,8 @@ export const programarPartido = async (req, res) => {
         p.idPartido,
         p.idEquipoLocal,
         p.idEquipoVisitante,
+        p.estado,
+        p.fechaCierre,
         DATE_FORMAT(t.fechaInicio, '%Y-%m-%d') AS fechaInicioTorneo,
         DATE_FORMAT(t.fechaFin, '%Y-%m-%d') AS fechaFinTorneo
       FROM partido p
@@ -144,6 +170,9 @@ export const programarPartido = async (req, res) => {
     `, [idPartido, req.user.idUsuario]);
 
     if (!partido) throw crearError('No se encontró el partido.', 404);
+    if (partido.fechaCierre || ['Finalizado', 'Anulado', 'Pase libre'].includes(partido.estado)) {
+      throw crearError('No se puede programar un partido que ya fue resuelto.', 409);
+    }
     if (!partido.idEquipoLocal || !partido.idEquipoVisitante) {
       throw crearError('El partido todavía espera que se definan sus dos equipos.', 409);
     }
@@ -208,6 +237,25 @@ export const programarPartido = async (req, res) => {
       LIMIT 1
     `, [req.user.idUsuario, idPartido, ...equiposIds, ...equiposIds, fechaHoraFin, fechaHoraInicio]);
     if (conflictoEquipo) throw crearError('Uno de los equipos ya tiene otro partido en ese horario.', 409);
+
+    const [[conflictoArbitro]] = await connection.query(`
+      SELECT a.nombre, a.apellido
+      FROM partido_arbitro asignacionOtra
+      JOIN arbitro a ON a.idArbitro = asignacionOtra.idArbitro
+      JOIN partido otro ON otro.idPartido = asignacionOtra.idPartido
+      JOIN torneo t ON t.idTorneo = otro.idTorneo
+      WHERE t.idUsuario = ? AND asignacionOtra.idPartido <> ?
+        AND asignacionOtra.idArbitro IN (
+          SELECT asignacionActual.idArbitro FROM partido_arbitro asignacionActual
+          WHERE asignacionActual.idPartido = ?
+        )
+        AND otro.fechaHoraInicio < ? AND otro.fechaHoraFin > ?
+        AND otro.fechaCierre IS NULL
+      LIMIT 1
+    `, [req.user.idUsuario, idPartido, idPartido, fechaHoraFin, fechaHoraInicio]);
+    if (conflictoArbitro) {
+      throw crearError(`El árbitro ${conflictoArbitro.nombre} ${conflictoArbitro.apellido} ya tiene otro encuentro en ese horario.`, 409);
+    }
 
     await connection.query(`
       UPDATE partido

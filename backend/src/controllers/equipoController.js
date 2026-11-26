@@ -118,16 +118,18 @@ export const createEquipo = async (req, res) => {
   if (capitan && typeof capitan === 'object') {
     capitanNormalizado = {
       nombre: typeof capitan.nombre === 'string' ? capitan.nombre.trim() : '',
-      apellido: typeof capitan.apellido === 'string' ? capitan.apellido.trim() : ''
+      apellido: typeof capitan.apellido === 'string' ? capitan.apellido.trim() : '',
+      dni: typeof capitan.dni === 'string' ? capitan.dni.trim() : ''
     };
   } else if (typeof capitan === 'string') {
     const partesNombre = capitan.trim().split(/\s+/);
     capitanNormalizado = {
       nombre: partesNombre.shift() || '',
-      apellido: partesNombre.join(' ')
+      apellido: partesNombre.join(' '),
+      dni: ''
     };
   } else {
-    capitanNormalizado = { nombre: '', apellido: '' };
+    capitanNormalizado = { nombre: '', apellido: '', dni: '' };
   }
 
   const datosEquipo = {
@@ -147,8 +149,8 @@ export const createEquipo = async (req, res) => {
   }
   if (!capitanNormalizado.nombre || capitanNormalizado.nombre.length > 80
     || !capitanNormalizado.apellido || capitanNormalizado.apellido.length > 80
-    || datosEquipo.capitan.length > 120) {
-    return res.status(400).json({ error: 'El capitán necesita nombre y apellido de hasta 80 caracteres.' });
+    || datosEquipo.capitan.length > 120 || capitanNormalizado.dni.length > 20) {
+    return res.status(400).json({ error: 'El capitán necesita nombre y apellido válidos; el DNI admite hasta 20 caracteres.' });
   }
   if (!Array.isArray(jugadores)) {
     return res.status(400).json({ error: 'La lista de jugadores no es válida.' });
@@ -175,13 +177,23 @@ export const createEquipo = async (req, res) => {
     && normalizarTexto(jugador.apellido) === normalizarTexto(capitanNormalizado.apellido)
   ));
 
-  if (indiceCapitan === -1) {
+  if (indiceCapitan >= 0) {
+    const jugadorCapitan = jugadoresNormalizados[indiceCapitan];
+    if (capitanNormalizado.dni && jugadorCapitan.dni && capitanNormalizado.dni !== jugadorCapitan.dni) {
+      return res.status(400).json({ error: 'El DNI del capitán no coincide con el DNI cargado para ese jugador.' });
+    }
+    jugadorCapitan.dni = jugadorCapitan.dni || capitanNormalizado.dni || null;
+  } else {
     jugadoresNormalizados.push({
       nombre: capitanNormalizado.nombre,
       apellido: capitanNormalizado.apellido,
-      dni: null
+      dni: capitanNormalizado.dni || null
     });
     indiceCapitan = jugadoresNormalizados.length - 1;
+  }
+
+  if (!jugadoresNormalizados[indiceCapitan].dni) {
+    return res.status(400).json({ error: 'El DNI del capitán es obligatorio.' });
   }
 
   let connection;
@@ -224,7 +236,7 @@ export const createEquipo = async (req, res) => {
       return res.status(400).json({ error: 'La disciplina seleccionada no existe.' });
     }
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'El DNI ingresado ya está registrado en otro equipo.' });
+      return res.status(409).json({ error: 'El DNI ingresado ya está registrado.' });
     }
 
     res.status(500).json({ error: 'No se pudo guardar el equipo y sus jugadores.' });
@@ -359,10 +371,94 @@ export const addJugador = async (req, res) => {
       return res.status(404).json({ error: 'No se encontró el equipo.' });
     }
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'Ese DNI ya está registrado en otro equipo.' });
+      return res.status(409).json({ error: 'Ese DNI ya está registrado.' });
     }
     console.error('Error al agregar jugador:', error);
     res.status(500).json({ error: 'No se pudo agregar el jugador.' });
+  }
+};
+
+export const updateJugador = async (req, res) => {
+  const idEquipo = obtenerIdValido(req.params.id);
+  const idJugador = obtenerIdValido(req.params.idJugador);
+  if (!idEquipo || !idJugador) {
+    return res.status(400).json({ error: 'El identificador del equipo o del jugador no es válido.' });
+  }
+
+  const { nombre, apellido, dni = '' } = req.body || {};
+  const jugador = {
+    nombre: typeof nombre === 'string' ? nombre.trim() : '',
+    apellido: typeof apellido === 'string' ? apellido.trim() : '',
+    dni: typeof dni === 'string' ? dni.trim() : ''
+  };
+
+  if (!jugador.nombre || jugador.nombre.length > 80
+    || !jugador.apellido || jugador.apellido.length > 80
+    || jugador.dni.length > 20) {
+    return res.status(400).json({
+      error: 'El jugador necesita nombre y apellido de hasta 80 caracteres; el DNI admite hasta 20.'
+    });
+  }
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [jugadores] = await connection.query(`
+      SELECT j.idJugador, j.esCapitan
+      FROM jugador j
+      JOIN equipo e ON e.idEquipo = j.idEquipo
+      WHERE j.idJugador = ? AND j.idEquipo = ? AND e.idUsuario = ?
+      FOR UPDATE
+    `, [idJugador, idEquipo, req.user.idUsuario]);
+
+    if (jugadores.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'No se encontró el jugador en este equipo.' });
+    }
+
+    const esCapitan = Number(jugadores[0].esCapitan) === 1;
+    const nombreCompleto = `${jugador.nombre} ${jugador.apellido}`;
+    if (esCapitan && nombreCompleto.length > 120) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'El nombre completo del capitán no puede superar 120 caracteres.' });
+    }
+    if (esCapitan && !jugador.dni) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'El capitán debe tener un DNI registrado.' });
+    }
+
+    await connection.query(`
+      UPDATE jugador
+      SET nombre = ?, apellido = ?, dni = ?
+      WHERE idJugador = ? AND idEquipo = ?
+    `, [jugador.nombre, jugador.apellido, jugador.dni || null, idJugador, idEquipo]);
+
+    if (esCapitan) {
+      await connection.query(
+        'UPDATE equipo SET capitan = ? WHERE idEquipo = ? AND idUsuario = ?',
+        [nombreCompleto, idEquipo, req.user.idUsuario]
+      );
+    }
+
+    await connection.commit();
+    res.json({
+      idJugador,
+      ...jugador,
+      dni: jugador.dni || null,
+      esCapitan,
+      message: 'Jugador actualizado correctamente.'
+    });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Ese DNI ya está registrado.' });
+    }
+    console.error('Error al actualizar jugador:', error);
+    res.status(500).json({ error: 'No se pudo actualizar el jugador.' });
+  } finally {
+    connection?.release();
   }
 };
 

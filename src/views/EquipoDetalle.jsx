@@ -10,6 +10,9 @@ export default function EquipoDetalle() {
   const [error, setError] = useState("");
   const [nuevoJugador, setNuevoJugador] = useState({ nombre: "", apellido: "", dni: "" });
   const [agregandoJugador, setAgregandoJugador] = useState(false);
+  const [jugadorEditando, setJugadorEditando] = useState(null);
+  const [datosJugadorEditados, setDatosJugadorEditados] = useState({ nombre: "", apellido: "", dni: "" });
+  const [guardandoEdicionJugador, setGuardandoEdicionJugador] = useState(false);
   const [errorPlantel, setErrorPlantel] = useState("");
   const [mensajePlantel, setMensajePlantel] = useState("");
   const jugadorCapitan = equipo?.jugadores?.find((jugador) => jugador.esCapitan);
@@ -89,6 +92,43 @@ export default function EquipoDetalle() {
       setMensajePlantel("Capitán actualizado.");
     } catch (saveError) {
       setErrorPlantel(saveError.message || "No se pudo conectar con el servidor.");
+    }
+  };
+
+  const iniciarEdicionJugador = (jugador) => {
+    setErrorPlantel("");
+    setMensajePlantel("");
+    setJugadorEditando(jugador.idJugador);
+    setDatosJugadorEditados({
+      nombre: jugador.nombre || "",
+      apellido: jugador.apellido || "",
+      dni: jugador.dni || "",
+    });
+  };
+
+  const guardarEdicionJugador = async (evento) => {
+    evento.preventDefault();
+    if (!jugadorEditando || guardandoEdicionJugador) return;
+
+    setGuardandoEdicionJugador(true);
+    setErrorPlantel("");
+    setMensajePlantel("");
+    try {
+      const response = await apiFetch(`/equipos/${id}/jugadores/${jugadorEditando}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(datosJugadorEditados),
+      });
+      const resultado = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(resultado.error || "No se pudo actualizar el jugador.");
+
+      await recargarEquipo();
+      setJugadorEditando(null);
+      setMensajePlantel("Datos del jugador actualizados.");
+    } catch (saveError) {
+      setErrorPlantel(saveError.message || "No se pudo conectar con el servidor.");
+    } finally {
+      setGuardandoEdicionJugador(false);
     }
   };
 
@@ -188,6 +228,7 @@ export default function EquipoDetalle() {
                   id="equipo-capitan"
                   value={jugadorCapitan?.idJugador || ""}
                   onChange={cambiarCapitan}
+                  disabled={jugadorEditando !== null}
                   className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none sm:ml-auto sm:min-w-64"
                 >
                   <option value="">Seleccioná un jugador</option>
@@ -207,17 +248,89 @@ export default function EquipoDetalle() {
             {equipo.jugadores?.length > 0 ? (
               <ul className="divide-y divide-slate-100">
                 {equipo.jugadores.map((jugador, index) => (
-                  <li key={jugador.idJugador} className="flex items-center gap-3 px-6 py-4">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-blue-700">
-                      {index + 1}
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">
-                        {jugador.nombre} {jugador.apellido}
-                        {jugador.esCapitan && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-800">Capitán</span>}
-                      </p>
-                      {jugador.dni && <p className="mt-0.5 text-xs text-slate-500">DNI: {jugador.dni}</p>}
+                  <li key={jugador.idJugador} className="px-5 py-4 sm:px-6">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-blue-700">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-sm font-semibold text-slate-800">
+                          {jugador.nombre} {jugador.apellido}
+                          {jugador.esCapitan && <span className="ml-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-800">Capitán</span>}
+                        </p>
+                        <p className="mt-0.5 break-all text-xs text-slate-500">
+                          {jugador.dni ? `DNI: ${jugador.dni}` : "Sin DNI registrado"}
+                        </p>
+                      </div>
+                      {Number(jugadorEditando) !== Number(jugador.idJugador) && (
+                        <button
+                          type="button"
+                          onClick={() => iniciarEdicionJugador(jugador)}
+                          disabled={jugadorEditando !== null}
+                          className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Editar
+                        </button>
+                      )}
                     </div>
+
+                    {Number(jugadorEditando) === Number(jugador.idJugador) && (
+                      <form onSubmit={guardarEdicionJugador} className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3">
+                        <label className="block text-xs font-semibold text-slate-600">
+                          Nombre
+                          <input
+                            type="text"
+                            value={datosJugadorEditados.nombre}
+                            onChange={(evento) => setDatosJugadorEditados((actual) => ({ ...actual, nombre: evento.target.value }))}
+                            maxLength={80}
+                            required
+                            disabled={guardandoEdicionJugador}
+                            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-500"
+                          />
+                        </label>
+                        <label className="block text-xs font-semibold text-slate-600">
+                          Apellido
+                          <input
+                            type="text"
+                            value={datosJugadorEditados.apellido}
+                            onChange={(evento) => setDatosJugadorEditados((actual) => ({ ...actual, apellido: evento.target.value }))}
+                            maxLength={80}
+                            required
+                            disabled={guardandoEdicionJugador}
+                            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-500"
+                          />
+                        </label>
+                        <label className="block text-xs font-semibold text-slate-600">
+                          DNI
+                          <input
+                            type="text"
+                            value={datosJugadorEditados.dni}
+                            onChange={(evento) => setDatosJugadorEditados((actual) => ({ ...actual, dni: evento.target.value }))}
+                            maxLength={20}
+                            required={Boolean(jugador.esCapitan)}
+                            disabled={guardandoEdicionJugador}
+                            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-500"
+                          />
+                        </label>
+                        <div className="flex justify-end gap-2 sm:col-span-3">
+                          <button
+                            type="button"
+                            onClick={() => { setJugadorEditando(null); setErrorPlantel(""); setMensajePlantel(""); }}
+                            disabled={guardandoEdicionJugador}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={guardandoEdicionJugador}
+                            className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-wait disabled:opacity-50"
+                          >
+                            {guardandoEdicionJugador ? "Guardando…" : "Guardar cambios"}
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </li>
                 ))}
               </ul>

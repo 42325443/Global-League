@@ -1,0 +1,11 @@
+{"id":"POS-002","title":"Criterio puntos","priority":"P0","type":"Unit"}
+{"id":"POS-003","title":"Criterio DG","priority":"P0","type":"Unit"}
+{"id":"POS-004","title":"Criterio GF","priority":"P0","type":"Unit"}
+{"id":"POS-005","title":"Criterio directo","priority":"P0","type":"Unit"}
+{"id":"POS-006","title":"Fair play","priority":"P1","type":"Unit"}
+{"id":"POS-007","title":"Reordenar criterios","priority":"P0","type":"API/E2E"}
+{"id":"POS-008","title":"Duplicados","priority":"P0","type":"API/Unit"}
+{"id":"POS-009","title":"Criterio no permitido","priority":"P0","type":"API/Unit"}
+{"id":"POS-010","title":"Botón Actualizar","priority":"P0","type":"E2E"}
+{"id":"POS-011","title":"Error red","priority":"P1","type":"E2E"}
+{"id":"POS-012","title":"Eliminatoria bloqueada","priority":"P1","type":"E2E"}

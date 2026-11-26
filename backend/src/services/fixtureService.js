@@ -29,8 +29,9 @@ const crearPartido = async (connection, idTorneo, partido) => {
       numeroPartido,
       idPartidoOrigenLocal,
       idPartidoOrigenVisitante,
+      idEquipoGanador,
       estado
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     idTorneo,
     partido.idEquipoLocal,
@@ -41,6 +42,7 @@ const crearPartido = async (connection, idTorneo, partido) => {
     partido.numeroPartido,
     partido.idPartidoOrigenLocal,
     partido.idPartidoOrigenVisitante,
+    partido.idEquipoGanador ?? null,
     partido.estado,
   ]);
 
@@ -118,8 +120,9 @@ const generarEliminacion = async (connection, idTorneo, idsEquipos) => {
   for (let indice = 0; indice < cantidadPartidosPrimeraRonda; indice += 1) {
     numeroPartido += 1;
     const tienePase = posicionesConPase.has(indice);
+    const equipoLocal = equipos[indiceEquipo++];
     const partido = await crearPartido(connection, idTorneo, {
-      idEquipoLocal: equipos[indiceEquipo++],
+      idEquipoLocal: equipoLocal,
       idEquipoVisitante: tienePase ? null : equipos[indiceEquipo++],
       jornada: 1,
       tipoEtapa: 'Eliminatoria',
@@ -127,10 +130,11 @@ const generarEliminacion = async (connection, idTorneo, idsEquipos) => {
       numeroPartido,
       idPartidoOrigenLocal: null,
       idPartidoOrigenVisitante: null,
+      idEquipoGanador: tienePase ? equipoLocal : null,
       estado: tienePase ? 'Pase libre' : 'Pendiente',
     });
 
-    partido.equipoGanadorConocido = tienePase ? partido.idEquipoLocal : null;
+    partido.equipoGanadorConocido = tienePase ? partido.idEquipoGanador : null;
     rondaAnterior.push(partido);
     totalPartidos += 1;
   }

@@ -47,6 +47,7 @@ const formatearHorario = (partido) => {
 export default function Calendario() {
   const [partidos, setPartidos] = useState([]);
   const [canchas, setCanchas] = useState([]);
+  const [arbitros, setArbitros] = useState([]);
   const [modoAsignacion, setModoAsignacion] = useState(false);
   const [filtroTorneo, setFiltroTorneo] = useState('');
   const [cargando, setCargando] = useState(true);
@@ -60,6 +61,10 @@ export default function Calendario() {
   const [guardandoCancha, setGuardandoCancha] = useState(false);
   const [errorCancha, setErrorCancha] = useState('');
   const [mensajeCancha, setMensajeCancha] = useState('');
+  const [partidoArbitros, setPartidoArbitros] = useState(null);
+  const [idsArbitrosSeleccionados, setIdsArbitrosSeleccionados] = useState([]);
+  const [guardandoArbitros, setGuardandoArbitros] = useState(false);
+  const [errorArbitros, setErrorArbitros] = useState('');
   const fechaHoy = obtenerFechaHoyLocal();
   const horaActual = obtenerHoraActualLocal();
   const fechasMinimas = [fechaHoy, partidoSeleccionado?.fechaInicioTorneo].filter(Boolean);
@@ -69,17 +74,20 @@ export default function Calendario() {
   );
 
   const obtenerDatos = useCallback(async () => {
-      const [respuestaPartidos, respuestaCanchas] = await Promise.all([
+      const [respuestaPartidos, respuestaCanchas, respuestaArbitros] = await Promise.all([
         apiFetch('/calendario'),
         apiFetch('/canchas'),
+        apiFetch('/arbitros'),
       ]);
-      const [partidosData, canchasData] = await Promise.all([
+      const [partidosData, canchasData, arbitrosData] = await Promise.all([
         leerRespuesta(respuestaPartidos, 'No se pudo cargar el calendario.'),
         leerRespuesta(respuestaCanchas, 'No se pudieron cargar las canchas.'),
+        leerRespuesta(respuestaArbitros, 'No se pudieron cargar los árbitros.'),
       ]);
       return {
         partidos: Array.isArray(partidosData) ? partidosData : [],
         canchas: Array.isArray(canchasData) ? canchasData : [],
+        arbitros: Array.isArray(arbitrosData) ? arbitrosData : [],
       };
   }, []);
 
@@ -90,6 +98,7 @@ export default function Calendario() {
       const datos = await obtenerDatos();
       setPartidos(datos.partidos);
       setCanchas(datos.canchas);
+      setArbitros(datos.arbitros);
     } catch (cargaError) {
       setError(cargaError.message || 'No se pudieron cargar los datos del calendario.');
     } finally {
@@ -104,6 +113,7 @@ export default function Calendario() {
         if (!activo) return;
         setPartidos(datos.partidos);
         setCanchas(datos.canchas);
+        setArbitros(datos.arbitros);
       })
       .catch((cargaError) => {
         if (activo) setError(cargaError.message || 'No se pudieron cargar los datos del calendario.');
@@ -125,6 +135,11 @@ export default function Calendario() {
 
   const partidosFiltrados = useMemo(() => partidos
     .filter((partido) => !filtroTorneo || String(partido.idTorneo) === filtroTorneo)
+    .filter((partido) => !modoAsignacion || (
+      partido.idEquipoLocal && partido.idEquipoVisitante
+      && !partido.fechaCierre
+      && !['Finalizado', 'Anulado', 'Pase libre'].includes(partido.estado)
+    ))
     .sort((a, b) => {
       const fechaA = a.fechaHoraInicio || '9999-12-31T23:59:59';
       const fechaB = b.fechaHoraInicio || '9999-12-31T23:59:59';
@@ -132,9 +147,10 @@ export default function Calendario() {
         || String(a.nombreTorneo).localeCompare(String(b.nombreTorneo))
         || Number(a.jornada) - Number(b.jornada)
         || Number(a.numeroPartido) - Number(b.numeroPartido);
-    }), [partidos, filtroTorneo]);
+    }), [partidos, filtroTorneo, modoAsignacion]);
 
-  const partidosProgramados = partidos.filter((partido) => partido.fechaHoraInicio && partido.fechaHoraFin).length;
+  const partidosProgramados = partidosFiltrados.filter((partido) => partido.fechaHoraInicio && partido.fechaHoraFin).length;
+  const partidosPendientesHorario = partidosFiltrados.length - partidosProgramados;
   const abrirProgramacion = (partido) => {
     setPartidoSeleccionado(partido);
     setFormularioProgramacion(crearFormularioProgramacion(partido));
@@ -206,6 +222,33 @@ export default function Calendario() {
 
   const actualizarCampoCancha = (campo, valor) => {
     setFormularioCancha((actual) => ({ ...actual, [campo]: valor }));
+  };
+
+  const abrirAsignacionArbitros = (partido) => {
+    setPartidoArbitros(partido);
+    setIdsArbitrosSeleccionados(String(partido.idsArbitros || '').split(',').filter(Boolean));
+    setErrorArbitros('');
+  };
+
+  const guardarAsignacionArbitros = async (event) => {
+    event.preventDefault();
+    if (!partidoArbitros || guardandoArbitros) return;
+    setGuardandoArbitros(true);
+    setErrorArbitros('');
+    try {
+      const response = await apiFetch(`/partidos/${partidoArbitros.idPartido}/arbitros`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idsArbitros: idsArbitrosSeleccionados.map(Number) }),
+      });
+      await leerRespuesta(response, 'No se pudieron guardar los árbitros.');
+      setPartidoArbitros(null);
+      await cargarDatos();
+    } catch (guardadoError) {
+      setErrorArbitros(guardadoError.message || 'No se pudieron guardar los árbitros.');
+    } finally {
+      setGuardandoArbitros(false);
+    }
   };
 
   return (
@@ -334,7 +377,7 @@ export default function Calendario() {
         </article>
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-slate-500">Partidos pendientes de horario</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">{partidos.length - partidosProgramados}</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{partidosPendientesHorario}</p>
         </article>
       </section>
 
@@ -368,8 +411,14 @@ export default function Calendario() {
           <p className="py-10 text-center text-sm text-slate-500">Cargando partidos…</p>
         ) : partidosFiltrados.length === 0 ? (
           <div className="py-10 text-center">
-            <p className="font-semibold text-slate-700">Todavía no hay partidos para mostrar.</p>
-            <p className="mt-1 text-sm text-slate-500">Generá el fixture desde los detalles de un torneo para programar sus encuentros.</p>
+            <p className="font-semibold text-slate-700">
+              {modoAsignacion ? 'No quedan partidos por programar o asignar.' : 'Todavía no hay partidos para mostrar.'}
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              {modoAsignacion
+                ? 'Los partidos terminados y los que todavía esperan equipos quedan fuera de esta lista.'
+                : 'Generá el fixture desde los detalles de un torneo para programar sus encuentros.'}
+            </p>
           </div>
         ) : (
           <div className="mt-4 space-y-3">
@@ -407,15 +456,28 @@ export default function Calendario() {
                         {partido.fechaFinTorneo ? ` al ${formatearFecha(partido.fechaFinTorneo)}` : ' en adelante'}
                       </p>
                     )}
+                    <p className="mt-2 text-xs text-slate-500">
+                      Árbitros: {partido.nombresArbitros || 'Sin asignar'}
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => abrirProgramacion(partido)}
-                    disabled={!tieneDosEquipos}
-                    className="shrink-0 rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {programado ? 'Cambiar programación' : 'Programar partido'}
-                  </button>
+                  <div className="flex shrink-0 flex-col gap-2 sm:w-48">
+                    <button
+                      type="button"
+                      onClick={() => abrirProgramacion(partido)}
+                      disabled={!tieneDosEquipos}
+                      className="rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {programado ? 'Cambiar programación' : 'Programar partido'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => abrirAsignacionArbitros(partido)}
+                      disabled={!tieneDosEquipos}
+                      className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Asignar árbitros
+                    </button>
+                  </div>
                 </article>
               );
             })}
@@ -548,6 +610,60 @@ export default function Calendario() {
               </form>
             )}
           </section>
+        </div>
+      )}
+
+      {partidoArbitros && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Cerrar asignación de árbitros"
+            onClick={() => !guardandoArbitros && setPartidoArbitros(null)}
+            className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
+            disabled={guardandoArbitros}
+          />
+          <form onSubmit={guardarAsignacionArbitros} className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 className="text-xl font-bold text-slate-900">Árbitros del partido</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {partidoArbitros.nombreTorneo} · {partidoArbitros.equipoLocal} vs. {partidoArbitros.equipoVisitante}
+            </p>
+            <p className="mt-4 text-xs text-slate-500">Solo aparecen árbitros activos habilitados para la disciplina. El primero seleccionado será el principal.</p>
+            {errorArbitros && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorArbitros}</p>}
+            <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
+              {arbitros
+                .filter((arbitro) => arbitro.estado === 'Activo' && Number(arbitro.idDisciplina) === Number(partidoArbitros.idDisciplina))
+                .map((arbitro) => {
+                  const id = String(arbitro.idArbitro || arbitro.id);
+                  const seleccionado = idsArbitrosSeleccionados.includes(id);
+                  return (
+                    <label key={id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50">
+                      <input
+                        type="checkbox"
+                        checked={seleccionado}
+                        onChange={() => setIdsArbitrosSeleccionados((actuales) => (
+                          seleccionado ? actuales.filter((valor) => valor !== id) : [...actuales, id]
+                        ))}
+                        className="h-4 w-4 accent-blue-600"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold text-slate-800">{arbitro.nombre} {arbitro.apellido}</span>
+                        <span className="block text-xs text-slate-500">{arbitro.especialidad || arbitro.deporte}</span>
+                      </span>
+                      {seleccionado && idsArbitrosSeleccionados[0] === id && <span className="text-xs font-bold text-blue-700">Principal</span>}
+                    </label>
+                  );
+                })}
+              {arbitros.filter((arbitro) => arbitro.estado === 'Activo' && Number(arbitro.idDisciplina) === Number(partidoArbitros.idDisciplina)).length === 0 && (
+                <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">No hay árbitros activos para la disciplina de este torneo. El partido puede quedar sin árbitro.</p>
+              )}
+            </div>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setPartidoArbitros(null)} disabled={guardandoArbitros} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Cancelar</button>
+              <button type="submit" disabled={guardandoArbitros} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                {guardandoArbitros ? 'Guardando…' : 'Guardar asignación'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
         </>

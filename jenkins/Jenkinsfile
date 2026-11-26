@@ -1,0 +1,99 @@
+// Jenkinsfile — Pipeline CI de Global League.
+// Espeja .github/workflows/ci.yml: lint -> unit -> integration -> e2e -> postman -> load-test.
+// Requiere en el agente: Node 20+, MySQL accesible, newman y k6 instalados
+// (o correr `bash scripts/setup-ci.sh` una vez).
+// Variables de entorno esperadas (credentials/env del job):
+//   DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, JWT_SECRET, BASE_URL (default localhost:3000/api)
+pipeline {
+  agent any
+
+  environment {
+    BASE_URL = "${env.BASE_URL ?: 'http://localhost:3000/api'}"
+    CI = 'true'
+  }
+
+  options {
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+  }
+
+  stages {
+    stage('Checkout + Install') {
+      steps {
+        checkout scm
+        sh 'node --version && npm --version'
+        sh 'npm ci'
+        dir('backend') {
+          sh 'npm ci'
+        }
+      }
+    }
+
+    stage('Lint') {
+      steps {
+        sh 'npx eslint .'
+      }
+    }
+
+    stage('Unit (frontend)') {
+      steps {
+        sh 'npx vitest run --coverage --reporter=junit --outputFile=test-reports/vitest-frontend.xml'
+      }
+      post {
+        always {
+          junit allowEmptyResults: true, testResults: 'test-reports/vitest-frontend.xml'
+        }
+      }
+    }
+
+    stage('Integration (backend)') {
+      steps {
+        dir('backend') {
+          // NOTA: no se usa `npm test` (placeholder que falla); se invoca vitest directo.
+          sh 'npx vitest run --coverage --reporter=junit --outputFile=../test-reports/vitest-backend.xml'
+        }
+      }
+      post {
+        always {
+          junit allowEmptyResults: true, testResults: 'test-reports/vitest-backend.xml'
+        }
+      }
+    }
+
+    stage('E2E') {
+      steps {
+        echo 'E2E pendiente de definir (Playwright/Cypress). Stage reservado para no romper el pipeline.'
+      }
+    }
+
+    stage('Postman / Newman') {
+      steps {
+        sh 'bash scripts/setup-ci.sh || true'
+        sh 'bash scripts/run-newman.sh'
+      }
+      post {
+        always {
+          junit allowEmptyResults: true, testResults: 'test-reports/newman.xml'
+          archiveArtifacts allowEmptyArchive: true, artifacts: 'test-reports/newman.html'
+        }
+      }
+    }
+
+    stage('Load test (k6)') {
+      steps {
+        sh 'bash scripts/run-load-test.sh || echo "k6 no disponible o backend caido; revisar test-reports/k6-summary.json"'
+      }
+      post {
+        always {
+          archiveArtifacts allowEmptyArchive: true, artifacts: 'test-reports/k6-summary.json'
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      archiveArtifacts allowEmptyArchive: true, artifacts: 'test-reports/**'
+    }
+  }
+}
